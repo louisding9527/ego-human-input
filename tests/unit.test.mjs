@@ -92,6 +92,14 @@ test("planKeys rebuilds latin text when typo is off", () => {
   assert.equal(rebuilt, "hello world");
 });
 
+test("planKeys 把中文按 <=2 字一组上屏，一次 insert 等于一个 input 事件", () => {
+  const params = { charMs: [50, 60], spaceMs: [90, 100], cjkGroupMs: [300, 400], typoEveryGroups: 4, typoRate: 0 };
+  const ops = planKeys("供应链总监", params, { rand: rnd(5) });
+  assert.ok(ops.length >= 3, `ops=${ops.length}，太少就凑不出间隔序列`);
+  assert.ok(ops.every((o) => o.op === "insert" && [...o.text].length <= 2));
+  assert.equal(ops.map((o) => o.text).join(""), "供应链总监");
+});
+
 test("planKeys inserts whole cjk groups and never types them char by char", () => {
   const params = { charMs: [50, 60], spaceMs: [90, 100], cjkGroupMs: [300, 400], typoEveryGroups: 4, typoRate: 0 };
   const ops = planKeys("中文测试", params, { rand: rnd(5) });

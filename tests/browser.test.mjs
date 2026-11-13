@@ -11,8 +11,8 @@ function fakePage() {
     goto: async (url, options) => calls.goto.push({ url, options }),
     reload: async () => calls.goto.push({ reload: true }),
     waitForSelector: async (selector, options) => calls.wait.push({ selector, options }),
-    evaluate: async (fn, arg) => {
-      calls.evaluate.push({ name: fn.name, arg });
+    async evaluate(fn, arg) {
+      calls.evaluate.push({ name: fn.name, arg, argc: arguments.length });
       if (fn.name === "BOX_FN") return { x: 1, y: 2, w: 3, h: 4, vw: 100, vh: 100 };
       if (fn.name === "CHALLENGE_FN") return ["captcha_widget"];
       return { ok: true };
@@ -86,4 +86,15 @@ test("challenge 缺省为数组，requests 只取请求事件", async () => {
   const browser = createBrowser(page);
   assert.deepEqual(await browser.challenge(), ["captcha_widget"]);
   assert.deepEqual(await browser.requests(), ["https://h.liepin.com/a", "https://h.liepin.com/b"]);
+});
+
+test("无参数的 evaluate 只传一个实参（ego-lite 拒绝 undefined）", async () => {
+  const { page, calls } = fakePage();
+  const browser = createBrowser(page);
+  await browser.health();
+  await browser.pageState();
+  for (const call of calls.evaluate) assert.equal(call.argc, 1, `${call.name} 传了 undefined`);
+
+  await browser.box("css=#a");
+  assert.equal(calls.evaluate.at(-1).argc, 2);
 });
