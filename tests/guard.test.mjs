@@ -93,6 +93,16 @@ test("store records events, aggregates metrics and enforces budget", () => {
   assert.equal(first.used, 1);
   assert.equal(second.used, 2);
 
+  // 预留-确认两段式：失败路径把预留还回去，且归还不会把用量压到负数。
+  assert.equal(store.budgetRelease("h.liepin.com", "search", hour).used, 1);
+  store.budgetRelease("h.liepin.com", "search", hour);
+  assert.equal(store.budgetRelease("h.liepin.com", "search", hour).used, 0);
+  assert.equal(store.budgetRead("h.liepin.com", "search", hour).used, 0);
+
+  // 配额上限以最后一次预留为准，不在冲突时保留旧值。
+  store.budgetTake("h.liepin.com", "search", hour, 5);
+  assert.equal(store.budgetRead("h.liepin.com", "search", hour).limit, 5);
+
   const alertId = store.addAlert({ runId, host: "h.liepin.com", level: "high", trigger: "challenge", evidence: { url: "x" }, ruleDecision: "abort" });
   assert.equal(store.pendingAlerts("h.liepin.com").length, 1);
   store.decideAlert(alertId, { decision: "abort", by: "agent", reason: "test" });
