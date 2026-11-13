@@ -35,7 +35,7 @@ const THRESHOLDS = {
     landingMedianPxMin: 3,
     movePointsMin: 10,
     stepIntervalCvMin: 0.15,
-    typeIntervalCvMin: 0.2,
+    typeIntervalCvMin: 0.15,
     readWriteRatioMin: 0.25,
     firstActionDwellMsMin: 300,
     sessionMaxMinutes: 120,
