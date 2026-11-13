@@ -35,9 +35,16 @@ const THRESHOLDS = {
     landingMedianPxMin: 3,
     movePointsMin: 10,
     readWriteRatioMin: 0.25,
+    firstActionDwellMsMin: 300,
+    sessionMaxMinutes: 120,
+    dailyActionsMax: 400,
   },
   regression: { subMetricDropMax: 0.05 },
 };
+
+const AT = 1700000000000;
+const at = (i) => AT + i * 1000;
+const shaped = (events, extra = {}) => observe(events, { startedAt: AT, endedAt: at(9), dayActions: 12, ...extra });
 
 test("locator parsing accepts css, href, role and bare selectors", () => {
   assert.deepEqual(parseLocator("css=#a .b"), { kind: "css", value: "#a .b" });
@@ -94,23 +101,39 @@ test("observe folds events into assertable statistics", () => {
 });
 
 test("evaluate fails when the run is centred, degraded or read-free", () => {
-  const clean = observe([
-    { action: "click", ok: 1, landing_px: 9, move_points: 26, travel_px: 400 },
-    { action: "read", ok: 1, move_points: 14, travel_px: 100 },
-    { action: "read", ok: 1, move_points: 12, travel_px: 90 },
-    { action: "type", ok: 1 },
+  const clean = shaped([
+    { ts: at(1), action: "click", ok: 1, landing_px: 9, move_points: 26, travel_px: 400 },
+    { ts: at(2), action: "read", ok: 1, move_points: 14, travel_px: 100 },
+    { ts: at(3), action: "read", ok: 1, move_points: 12, travel_px: 90 },
+    { ts: at(4), action: "type", ok: 1 },
   ]);
   const good = evaluate(clean, THRESHOLDS);
   assert.equal(good.ok, true);
+  assert.equal(good.total, 9);
 
-  const centred = observe([
-    { action: "click", ok: 1, landing_px: 0, move_points: 26, travel_px: 400 },
-    { action: "click", ok: 1, landing_px: 0, move_points: 22, travel_px: 380 },
+  const centred = shaped([
+    { ts: at(1), action: "click", ok: 1, landing_px: 0, move_points: 26, travel_px: 400 },
+    { ts: at(2), action: "click", ok: 1, landing_px: 0, move_points: 22, travel_px: 380 },
   ]);
   const bad = evaluate(centred, THRESHOLDS);
   assert.equal(bad.ok, false);
   assert.ok(bad.checks.find((check) => check.id === "landing").ok === false);
   assert.ok(bad.checks.find((check) => check.id === "read-write").ok === false);
+});
+
+test("session shape is asserted, and missing data never counts as a pass", () => {
+  const noSession = observe([{ action: "click", ok: 1, landing_px: 9, move_points: 26 }]);
+  const checks = evaluate(noSession, THRESHOLDS).checks;
+  for (const id of ["dwell", "session-length", "daily-actions"]) {
+    assert.equal(checks.find((check) => check.id === id).ok, false, `${id} 缺数据时必须判失败`);
+  }
+
+  const tooLong = shaped(
+    [{ ts: at(1), action: "read", ok: 1, move_points: 12 }],
+    { endedAt: at(1) + 121 * 60000, dayActions: 12 },
+  );
+  const verdict = evaluate(tooLong, THRESHOLDS);
+  assert.equal(verdict.checks.find((check) => check.id === "session-length").ok, false);
 });
 
 test("compare flags per-metric regression, not just the total", () => {
@@ -269,7 +292,7 @@ test("verify-human passes a clean run and fails a centred one", () => {
   seedRun(bad, { centred: true });
 
   const passed = execFileSync(process.execPath, [VERIFY_TOOL, "--db", good], { encoding: "utf8" });
-  assert.match(passed, /gate ok: 6\/6/);
+  assert.match(passed, /gate ok: 9\/9/);
 
   assert.throws(
     () => execFileSync(process.execPath, [VERIFY_TOOL, "--db", bad], { encoding: "utf8", stdio: "pipe" }),

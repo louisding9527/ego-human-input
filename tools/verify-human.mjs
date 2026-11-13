@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { openStore } from "../lib/store.mjs";
 import { observe } from "../lib/observe.mjs";
 import { evaluate, compare } from "../lib/verify.mjs";
+import { dayStart } from "../lib/session.mjs";
 
 const SKILL_DIR = dirname(dirname(fileURLToPath(import.meta.url)));
 const THRESHOLDS = join(SKILL_DIR, "profiles", "thresholds.json");
@@ -35,7 +36,11 @@ if (!events.length) {
 }
 
 const thresholds = JSON.parse(await readFile(THRESHOLDS, "utf8"));
-const observed = observe(events);
+const observed = observe(events, {
+  startedAt: run.started_at,
+  endedAt: run.ended_at ?? null,
+  dayActions: store.dailyActions(run.host, dayStart(Date.now())),
+});
 const verdict = evaluate(observed, thresholds);
 
 let regression = null;
@@ -57,6 +62,14 @@ if (wantsJson) {
 } else {
   console.log(`run   = ${run.id}  host=${run.host}  profile=${run.profile || "-"}  ver=${run.skill_ver || "-"}`);
   console.log(`events= ${observed.n}  reads=${observed.reads}  writes=${observed.writes}  clicks=${observed.clicks}  details=${observed.details}`);
+  const s = observed.session || {};
+  const dwell = Number(s.dwellMs);
+  const duration = Number(s.durationMs);
+  console.log(
+    `session= ${Number.isFinite(dwell) ? `${Math.round(dwell)}ms 首动作前停留` : "n/a"}  `
+    + `${Number.isFinite(duration) ? `${Math.round(duration / 1000)}s 时长` : "n/a"}  `
+    + `${s.dayActions === null || s.dayActions === undefined ? "n/a" : `${s.dayActions} 今日动作`}`,
+  );
   console.log(`thresholds v${thresholds.version}  calibrated=${thresholds.calibrated ? "yes" : "no（工程值）"}`);
   console.log("");
   for (const check of verdict.checks) {

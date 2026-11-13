@@ -9,6 +9,7 @@
         "write": { "perHour": 6, "gap": [25000, 60000] },
         "nav": { "perHour": 12, "gap": [12000, 35000] }
       },
+      "session": { "dwellMs": [1200, 3000], "maxMinutes": 60, "dailyActionsMax": 200, "restEveryActions": 40, "restMs": [30000, 90000], "activeHours": [8, 23], "offHoursGapFactor": 2, "ratioWindow": 6, "readWriteRatioMin": 0.5, "autoReadMs": [900, 1600] },
       "search": { "maxConsecutive": 3, "nearDupDistance": 2, "requireDetailAfter": 3 },
       "alert": { "windowMs": 1800000, "reviewTimeoutMs": 1800000 },
       "mouse": { "trajectory": ["bezier", "jitter", "overshoot"], "samples": [12, 26], "stepMs": [8, 20], "landingJitterPx": 2, "clickDelayMs": [50, 110], "hoverMs": [80, 200] },
@@ -25,6 +26,7 @@
         "write": { "perHour": 10, "gap": [15000, 40000] },
         "nav": { "perHour": 20, "gap": [8000, 25000] }
       },
+      "session": { "dwellMs": [800, 2500], "maxMinutes": 90, "dailyActionsMax": 400, "restEveryActions": 60, "restMs": [20000, 45000], "activeHours": [8, 23], "offHoursGapFactor": 1.8, "ratioWindow": 8, "readWriteRatioMin": 0.35, "autoReadMs": [700, 1400] },
       "search": { "maxConsecutive": 3, "nearDupDistance": 2, "requireDetailAfter": 3 },
       "alert": { "windowMs": 1800000, "reviewTimeoutMs": 1800000 },
       "mouse": { "trajectory": ["bezier", "jitter", "overshoot"], "samples": [12, 26], "stepMs": [6, 16], "landingJitterPx": 3, "clickDelayMs": [40, 90], "hoverMs": [60, 160] },
@@ -41,6 +43,7 @@
         "write": { "perHour": 20, "gap": [8000, 25000] },
         "nav": { "perHour": 30, "gap": [4000, 15000] }
       },
+      "session": { "dwellMs": [500, 1500], "maxMinutes": 120, "dailyActionsMax": 600, "restEveryActions": 100, "restMs": [10000, 25000], "activeHours": [7, 24], "offHoursGapFactor": 1.4, "ratioWindow": 10, "readWriteRatioMin": 0.25, "autoReadMs": [500, 1000] },
       "search": { "maxConsecutive": 5, "nearDupDistance": 1, "requireDetailAfter": 5 },
       "alert": { "windowMs": 1800000, "reviewTimeoutMs": 1800000 },
       "mouse": { "trajectory": ["bezier", "jitter"], "samples": [10, 18], "stepMs": [4, 10], "landingJitterPx": 4, "clickDelayMs": [30, 70], "hoverMs": [40, 100] },

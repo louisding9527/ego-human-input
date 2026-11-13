@@ -260,6 +260,20 @@ test("read 记一条 read 事件，并真的滚了轮子", async () => {
   }
 });
 
+test("连续搜索到配额仍不开详情就停手", async () => {
+  const h = harness();
+  const s = await session(h);
+  try {
+    for (let i = 0; i < 3; i += 1) await s.handle.click("css=#go", { as: "search" });
+    await assert.rejects(
+      () => s.handle.click("css=#go", { as: "search" }),
+      (error) => error.payload?.trigger === "search-no-detail",
+    );
+  } finally {
+    s.close();
+  }
+});
+
 test("inspect 只读且哨兵可查", async () => {
   const h = harness();
   const s = await session(h);

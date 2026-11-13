@@ -1,6 +1,6 @@
 {
   "_comment": "冻结阈值。verify-human 只读本文件，不读运行时 profile 覆盖：agent 不得改判定标准。所有数值是工程值，未用真人样本校准。",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "calibrated": false,
   "assertions": {
     "untrustedMax": 0,
@@ -8,7 +8,10 @@
     "landingZeroRateMax": 0.1,
     "landingMedianPxMin": 3,
     "movePointsMin": 10,
-    "readWriteRatioMin": 0.25
+    "readWriteRatioMin": 0.25,
+    "firstActionDwellMsMin": 300,
+    "sessionMaxMinutes": 120,
+    "dailyActionsMax": 400
   },
   "regression": {
     "subMetricDropMax": 0.05,
