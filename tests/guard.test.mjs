@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { rmSync } from "node:fs";
-import { classifyUrl, isApiEndpoint, shortHash } from "../lib/guard.mjs";
+import { classifyUrl, isApiEndpoint, shortHash, toOrigin } from "../lib/guard.mjs";
 import { intervalCv, sequenceRepeatRate, editDistance, scoreMetrics, classifyScore } from "../lib/score.mjs";
 import { openStore } from "../lib/store.mjs";
 import { createMachine, STATES } from "../lib/alert.mjs";
@@ -29,6 +29,14 @@ test("isApiEndpoint catches form endpoints used as data APIs", () => {
   assert.equal(isApiEndpoint("https://h.liepin.com/search/getConditionItem"), true);
   assert.equal(isApiEndpoint("https://h.liepin.com/api/v1/list"), true);
   assert.equal(isApiEndpoint("https://h.liepin.com/resumemanage/showmytalentlist"), false);
+});
+
+test("toOrigin 把站点写法统一成 origin", () => {
+  assert.equal(toOrigin("h.liepin.com"), "https://h.liepin.com");
+  assert.equal(toOrigin("https://h.liepin.com/search?kw=x"), "https://h.liepin.com");
+  assert.equal(toOrigin("http://127.0.0.1:7788/x"), "http://127.0.0.1:7788");
+  assert.equal(toOrigin(""), "");
+  assert.equal(toOrigin(":::"), "");
 });
 
 test("shortHash is stable and short", () => {

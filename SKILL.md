@@ -151,11 +151,18 @@ node tools/recipe.mjs show --host h.liepin.com --intent search
 为什么停、你该做什么（登录 / 完成人机验证 / 等配额恢复）。一份代码同时覆盖 Windows 与 macOS，
 不需要装 app、不需要 token。
 
-一次性的准备（只做一次）：
+授权每个站点做一次，用引导命令：
 
-1. 在目标站点第一次用本库时，页面会请求通知权限——点「允许」。
-2. 没弹或点错了，去 `chrome://settings/content/notifications` 把该站点改成「允许」。
-3. macOS 还要在「系统设置 → 通知 → Google Chrome」里允许通知。
+```bash
+node tools/notify-setup.mjs h.liepin.com            # 弹出 Chrome 授权气泡
+# 到 ego-lite 窗口点「允许」
+node tools/notify-setup.mjs --check h.liepin.com    # 验证并试发一条
+```
+
+为什么是两步：Chrome 要求 `requestPermission()` 由真实点击触发，而 ego-lite 一旦检测到
+权限气泡，就会停下脚本、把空间交给用户（`A browser permission prompt ... has appeared`）。
+所以引导做完第一步必然退出——**这是设计，不是失败**。权限按 origin 存在浏览器 profile 里，
+换站点、换 profile、清了站点数据都要重新授权；macOS 还要在「系统设置 → 通知 → Google Chrome」允许。
 
 授权状态可以随时查：
 

@@ -167,6 +167,19 @@ Enter 成 chip → 点「搜 索」→ 读 6s。
 
 这次是 **1 次复测**，不是统计结论。跨站点、跨意图、跨时段仍需多跑。
 
+### 停手通知的实测（2026-11-13）
+
+| 事实 | 结果 |
+| --- | --- |
+| `Notification` 可用性 | ego-lite 页面里存在，`isSecureContext=true`，初始 `permission=default` |
+| 触发授权 | 真实鼠标点击按钮后 `requestPermission()` 生效，Chrome 原生气泡弹出 |
+| ego-lite 的反应 | **主动停下脚本**并报 `A browser permission prompt for notifications has appeared`，空间转为 `agentDelegatedToUser` |
+| 引导工具 | `tools/notify-setup.mjs` 两步：先弹气泡，用户点「允许」，再 `--check` 验证并试发 |
+| 未授权时 | 时间线记 `notify {ok:false, reason:"permission:default"}`，门禁不受影响 |
+
+结论：**通知链路可用，但授权必须是人点的那一下**。ego-lite 会在那一刻收走控制权，
+所以“一键完成授权”不成立，工具只能做成“弹出来 → 你点 → 再验证”。
+
 ---
 
 # 复跑命令
