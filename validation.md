@@ -84,12 +84,42 @@ result cards: 30
 
 ---
 
+# v0.6（2026-11-13）可判定
+
+把「像人」从形容词变成可执行断言。
+
+| 项 | 内容 |
+| --- | --- |
+| 观测 | `events` 新增 `landing_px` / `move_points` / `travel_px`；老库自动 `ALTER` 迁移 |
+| 落点 | 由「先抖动再回到几何中心」改为元素内非中心采样；元素过小（<10px）回退中心并记为 0 |
+| 阈值 | `profiles/thresholds.json` 冻结，**工程值，未校准**；门禁只读它 |
+| 门禁 | `tools/verify-human.mjs` 六条断言 + 基线对照，失败退出码 1 |
+| 经验 | `site_notes.scope`（site/global）；`tools/site.mjs promote` 按机械规则晋升 |
+| 迭代 | `iterations` 表 + `tools/iterate.mjs record/list/show/decide` |
+| 清理 | 删除从未写入的 `rounds` 表；timeline 只记 pathname，不再写完整 URL |
+
+实测：
+
+| 项 | 结果 |
+| --- | --- |
+| 单测 | 37/37 通过（新增 12 条：定位符、落点、观测、断言、对照、经验归一与晋升、迁移、迭代、门禁 CLI） |
+| 合成回放样例门禁 | 6/6 通过，落点中位偏移 10.5px。**事件流是造的，用于验证机制，未在真站复测** |
+| 历史 run 门禁 | 3/6：「落点」「落点中位」「移动采样点」失败，因老数据没有观测列 |
+| 迁移 | 旧库（无 scope / 无 landing_px / 有 rounds）打开后补列、删 rounds，事件可回读 |
+| 未实现 | 会话形状、配额两段式、哨兵改造；见 docs/architecture.md 缺口清单 |
+
+---
+
 # 复跑命令
 
 ```bash
 node --test "<SKILL_DIR>/tests/*.test.mjs"
 node tools/lint-script.mjs examples/timeline.mjs
+node tools/verify-human.mjs
+node tools/verify-human.mjs --baseline <runId>
 node tools/recipe.mjs list --host liepin.com
 node tools/site.mjs list --platform liepin.com --intent search
+node tools/site.mjs promote
+node tools/iterate.mjs list --site liepin.com
 node tools/export.mjs --out ./out
 ```

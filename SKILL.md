@@ -2,7 +2,7 @@
 name: ego-human-input
 description: 让 ego-browser（ego-lite）的鼠标键盘行为接近真人，并按站点控制操作频率。当任务涉及浏览器自动化、拟人输入、防反爬、控制点击与输入节奏、页面浏览停顿、滚轮滚动时使用。不用于指纹伪造、验证码绕过或多账号轮换。
 metadata:
-  version: "0.5.0"
+  version: "0.6.0"
   date: "2026-11-13"
 ---
 
@@ -39,7 +39,7 @@ const task = await taskSpace("liepin 候选人筛选");
 const page = task.page("p1");
 await page.goto("https://www.liepin.com/");
 
-const h = await human.create(page, { task });   // 识别站点，加载档案
+const h = await human.create(page);   // 识别站点，加载档案
 console.log(h.site());                          // { host, siteKey, profile }
 console.log(h.health.warnings);                 // 体检告警，空数组为正常
 
@@ -54,7 +54,7 @@ console.log(await h.flush());                   // 落盘时间线与限速状�
 
 | 方法 | 说明 |
 | --- | --- |
-| `create(page, { task?, profile?, perMinute?, dbPath? })` | 识别站点、体检、装哨兵、起 run、接管冷却 |
+| `create(page, { profile?, dbPath?, store? })` | 识别站点、体检、装哨兵、起 run、接管冷却；返回句柄 |
 | `h.site()` / `h.params()` / `h.health` | 站点档案 / 生效参数 / 环境体检 |
 | `h.goto(url)` | 导航入口，先判 URL 与 API 端点 |
 | `h.click(target, {as})` | 指针轨迹点击；`as` 决定配额类型 |
@@ -109,8 +109,8 @@ node tools/recipe.mjs show --host h.liepin.com --intent search
 
 1. **不要用 `mouse.move` 的 `steps` 做拟人。** 它在一次 CDP 调用内插值，事件时间戳几乎相同。本库是逐点调用并真实等待。
 2. **中文没有逐键事件。** `keyboard.type` 对中文只能整段合成。本库按词组 `insertText`，组间 300~1200ms，模拟输入法上屏。
-3. **坐标可能拿不到。** `snapshot` 有 `loc=` 但没有坐标。本库尝试解析 `css:` / `href:` / `role:`，失败时降级为 `page.click(locator)`，返回 `{ degraded: "no-coords" }`。降级是常态，不是错误。
-4. **挑战页要交给人。** 检测到验证码或 Cloudflare 挑战时抛 `HumanBlocked`。传入 `task` 时会先 `handOff()`。不要重试、不要换 profile、不要绕。
+3. **坐标可能拿不到。** `snapshot` 有 `loc=` 但没有坐标。本库尝试解析 `css:` / `href:` / `role:`，解析不到就抛 `s1-missing`，**不降级成 `page.click`**。降级等于以为在拟人、其实在跳变，所以要改定位符，不要绕过。
+4. **挑战页要交给人。** 检测到验证码或 Cloudflare 挑战时抛 `HumanBlocked`。不要重试、不要换 profile、不要绕。
 
 ## 禁止事项
 
@@ -135,6 +135,31 @@ node tools/alert.mjs decide --id 12 --decision backoff --reason "..."
 
 冻结期间只读可用。规则细节见 [references/guard.md](references/guard.md)。
 
+## 跑完要过门禁
+
+每次跑完，用门禁检查这一次的行为是否仍在人类区间内：
+
+```bash
+node tools/verify-human.mjs                     # 最近一次 run
+node tools/verify-human.mjs --run <id>          # 指定 run
+node tools/verify-human.mjs --baseline <id>     # 与基线对照，任一分项退化 >5% 判失败
+```
+
+六条断言：非信任输入为 0、无降级、落点不扎堆中心、落点中位偏移、移动采样点下限、读写比下限。
+失败退出码为 1。阈值冻结在 `profiles/thresholds.json`，**agent 不许改**。
+
+改动参数或配方后要记账，改了什么、为什么、门禁前后如何：
+
+```bash
+node tools/iterate.mjs record --site liepin.com --intent search --kind param \
+  --before '{"gap":[45000,120000]}' --after '{"gap":[60000,150000]}' \
+  --rationale "..." --trigger budget
+node tools/iterate.mjs list --site liepin.com
+node tools/iterate.mjs decide --id 1 --outcome kept --reason "门禁 6/6"
+```
+
+同一 (站点, 意图) 连续 3 代没有改善就停手，升级为告警等人工裁决。
+
 ## 站点交互经验
 
 经验按三个维度归档，不写进代码：
@@ -144,6 +169,7 @@ node tools/alert.mjs decide --id 12 --decision backoff --reason "..."
 | `platform` | 站点 key，如 `liepin.com` | 用注册域名，子域共享一份 |
 | `intent` | `search` / `favorite` / `apply` …，`*` 表示通用 | 一条经验归属某个动作意图 |
 | `kind` | `hint` / `pitfall` / `selector` / `timing` | 是什么类型的经验 |
+| `scope` | `site` / `global` | 只对本站点有效，还是跨站点通用 |
 
 开工前按意图读：
 
@@ -170,9 +196,13 @@ await h.note({
 ```bash
 node tools/site.mjs list --platform liepin.com --intent search
 node tools/site.mjs add --platform liepin.com --intent search --kind pitfall --text "..."
+node tools/site.mjs promote            # 按机械规则把可通用经验晋升为 global
 ```
 
 同平台 + 同意图 + 同类型 + 同文本只累加 `hits`，不产生重复行。
+
+跨站晋升是机械判定，不靠语义：kind 属于 `hint` / `timing`、没有 selector、
+在 ≥2 个平台各命中 ≥2 次。selector 与 pitfall 永不通用。
 
 ## 导出数据
 
@@ -182,7 +212,7 @@ node tools/site.mjs add --platform liepin.com --intent search --kind pitfall --t
 node tools/export.mjs --out ./out        # 每张表导成 jsonl + csv，附 summary.json
 ```
 
-表：`runs`、`events`、`rounds`、`budget_use`、`alerts`、`host_state`、`site_notes`。导出的是行为与经验，不含姓名、简历 ID、输入文本。
+表：`runs`、`events`、`iterations`、`budget_use`、`alerts`、`host_state`、`site_notes`、`recipes`。导出的是行为与经验，不含姓名、简历 ID、输入文本。
 
 ## 调参
 

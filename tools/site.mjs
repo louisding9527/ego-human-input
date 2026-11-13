@@ -5,7 +5,7 @@ const arg = (name, fallback = "") => {
   const i = rest.indexOf(`--${name}`);
   return i >= 0 && rest[i + 1] ? rest[i + 1] : fallback;
 };
-const store = openStore();
+const store = openStore(arg("db") || undefined);
 
 if (cmd === "list") {
   const platform = arg("platform");
@@ -41,8 +41,12 @@ if (cmd === "list") {
     selector: arg("selector"),
   });
   console.log(`note ${id} saved for ${platform}`);
+} else if (cmd === "promote") {
+  const promoted = store.promoteNotes();
+  if (!promoted.length) console.log("nothing to promote");
+  for (const row of promoted) console.log(`promoted note ${row.id} (${row.kind}) from ${row.sites.join(", ")}`);
 } else {
-  console.error("usage: node tools/site.mjs <list|add> [--platform P] [--intent I] [--kind K] [--text T] [--selector S]");
+  console.error("usage: node tools/site.mjs <list|add|promote> [--platform P] [--intent I] [--kind K] [--text T] [--selector S]");
   process.exit(2);
 }
 

@@ -12,7 +12,7 @@ const outDir = arg("out", `./human-export-${new Date().toISOString().slice(0, 10
 const only = arg("tables", "").split(",").map((s) => s.trim()).filter(Boolean);
 const tables = only.length
   ? only
-  : ["runs", "events", "rounds", "budget_use", "alerts", "host_state", "site_notes"];
+  : ["runs", "events", "iterations", "budget_use", "alerts", "host_state", "site_notes", "recipes"];
 
 mkdirSync(outDir, { recursive: true });
 const store = openStore();

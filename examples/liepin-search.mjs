@@ -6,7 +6,7 @@ const task = await taskSpace("liepin 搜索示例");
 const page = task.page("p1");
 await page.goto("https://h.liepin.com/", { timeout: 30000 });
 
-const h = await human.create(page, { task });
+const h = await human.create(page);
 
 console.log("site:", h.site());
 for (const note of h.notes()) console.log(`[${note.area}] ${note.text}`);

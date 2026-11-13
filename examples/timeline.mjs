@@ -14,7 +14,7 @@ await page.evaluate(() => { /* lint-allow: 只装事件记录器，不改页面�
   }, true);
 });
 
-const h = await human.create(page, { task });
+const h = await human.create(page);
 console.log("site:", h.site());
 console.log("health:", { webdriver: h.health.webdriver, tz: h.health.tz, warnings: h.health.warnings });
 
