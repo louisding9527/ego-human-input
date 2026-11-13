@@ -13,3 +13,6 @@ Thumbs.db
 # Trellis 脚本运行时产物
 __pycache__/
 *.pyc
+
+# 发布包
+dist/

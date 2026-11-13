@@ -285,6 +285,7 @@ await h.finish();                 // 先落盘，再关空间；要留页面给�
 node tools/lint-script.mjs examples/liepin-search.mjs   # 跑前扫一遍写路径
 node tools/verify-human.mjs                              # 跑后过一遍门禁
 node tools/where.mjs                                     # 路径自检：本仓库 / importUrl / ego lite 的 references
+node tools/package.mjs                                   # 打发布包到 dist/（zip + tar.gz，带 sha256）
 ```
 
 ---
