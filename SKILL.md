@@ -1,6 +1,6 @@
 ---
 name: ego-human-input
-description: 需要用浏览器（ego-browser / ego-lite）操作真实站点时读本技能：打开页面、点击、填表、登录、翻页、抓取数据、做 web app 测试与 QA。它是 ego-browser 的唯一入口，包含 ego-browser 的调用契约与一层拟人输入（点击轨迹、输入节奏、滚动停顿、配额、停手与交权）。先读这里，再按本文要求跑 `ego-browser skill` 取版本匹配的指南。
+description: 需要用浏览器（ego-browser / ego-lite）操作真实站点时先读本技能：打开页面、点击、填表、登录、翻页、抓取数据、做 web app 测试与 QA。它包含 ego-browser 的调用契约（空间与轮次、观察、系统级操作）与一层拟人输入（点击轨迹、输入节奏、滚动停顿、配额、停手与交权）。目录里同时有 ego-browser 技能时也以本技能为准，再按本文要求跑 `ego-browser skill` 取版本匹配的指南。
 metadata:
   version: "0.8.0"
   date: "2026-11-13"
@@ -26,22 +26,41 @@ ego-browser 给 agent 一双眼睛：真实 Chromium、真实登录态、页面�
 
 ## 入口契约（先读这段）
 
-1. **指南不在本文里。** 先跑 `ego-browser skill`，按它打印的指南走；那份指南随
-   ego lite 版本变。输出里如果缺少 `[ego-browser:skill] end of guide` 这一行，
-   说明被截断了：重定向到文件再分段读。
-2. **版本敏感的东西一律不复制。** 安装与升级、清 cookie/缓存、平台差异，看
-   `~/.local/share/ego/ego-skills/references/`（稳定链接，永远指向当前 active 版本）。
-3. **冲突的裁决在 [references/bridge.md](references/bridge.md)。** 它规定谁负责哪类动作、
+1. **先确认自己在哪。** 技能装在哪台机器、哪个目录都不固定，别抄本文示例里的路径：
+
+   ```bash
+   node <技能目录>/tools/where.mjs
+   ```
+
+   它打印三件事：本仓库绝对路径、`lib/human.mjs` 的 `file:///` URL、ego lite 技能目录
+   （从宿主注册的 `ego-browser` 技能链接解析，不猜平台路径）。后面所有路径都用它的输出；
+   本文里写的 `node tools/...` 也都在技能目录下执行。
+
+2. **指南不在本文里。** 跑 `ego-browser skill`，按它打印的指南走；那份指南随 ego lite
+   版本变。输出里缺 `[ego-browser:skill] end of guide` 这一行就是被截断了：重定向到
+   文件再分段读。
+
+3. **版本敏感的东西一律不复制。** 安装与升级、清 cookie/缓存、平台差异，看
+   `where.mjs` 输出的 `egoReferences`（即宿主注册的 ego-browser 技能目录下的
+   `references/`）。那个目录跟着 ego lite 升级走，本文不镜像它。
+
+4. **冲突的裁决在 [references/bridge.md](references/bridge.md)。** 它规定谁负责哪类动作、
    一轮怎么收尾、哪些系统操作必须交回 `page.*`。本文与指南对不上时以它为准。
-4. **本库是库，不是程序。** 一组 ESM 模块，跑在 `ego-browser nodejs` 的同一个进程里，
+
+5. **两个浏览器技能共存时以本技能为准。** ego-browser 技能只讲“跑 `ego-browser skill`”，
+   不含拟人层。不要改它的目录（升级会覆盖，且各机器路径不同），也不要镜像它的文件。
+
+6. **本库是库，不是程序。** 一组 ESM 模块，跑在 `ego-browser nodejs` 的同一个进程里，
    不启动独立浏览器。
 
 ```js
-const { human } = await import("file:///C:/Users/<用户名>/.agents/skills/ego-human-input/lib/human.mjs");
+// importUrl 原样来自 `node <技能目录>/tools/where.mjs` 的输出（含空格也已编码），不要手拼：
+// macOS / Linux  file:///Users/me/.agents/skills/ego-human-input/lib/human.mjs
+// Windows        file:///C:/Users/me/.agents/skills/ego-human-input/lib/human.mjs
+const { human } = await import("<importUrl>");
 ```
 
-安装位置决定 import 路径，Windows 默认就是上面那条。`lib/` 与 `profiles/` 必须保持
-仓库相对布局，搬走会静默降级成空档案。
+`lib/` 与 `profiles/` 必须保持仓库相对布局，搬走会静默降级成空档案。
 
 ## 最小用法
 

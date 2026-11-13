@@ -108,6 +108,8 @@ ego-browser 的指南由二进制打印（`ego-browser skill`，当前 v2.2.1）
 ## 版本守卫
 
 - 指南版本变了先读 `ego-browser skill` 输出，再跑 `node --test "tests/*.test.mjs"` 与 `tools/lint-script.mjs`。
-- 入口壳 `skill/ego-browser/SKILL.md` 只做跳转，不含版本敏感内容；安装、清状态文档用
-  `~/.local/share/ego/ego-skills/references/`（稳定链接，永远指向当前 active 版本）。
+- **不镜像 ego-browser 的文件，也不改它的目录。** 它的路径逐台机器不同（Windows 在安装盘符下，
+  macOS/Linux 在别处），升级还会换版本目录。需要它的 `references/` 时，用
+  `node tools/where.mjs` 拿 `egoReferences`，那一条是从宿主注册的 `ego-browser` 技能链接解析出来的。
+- 两个技能同时被加载时，以本技能与本文档为准；ego-browser 技能只提供“跑 `ego-browser skill`”。
 - 实测基线：ego lite 0.6.3.12 / 指南 v2.2.1 / 本库 0.8.0。

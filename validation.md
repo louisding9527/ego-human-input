@@ -186,20 +186,21 @@ Enter 成 chip → 点「搜 索」→ 读 6s。
 
 # v0.8（2026-11-13）合并 ego-browser
 
-方向：ego-browser 的技能正文并入本项目，本项目成为浏览器任务的唯一入口。
+方向：ego-browser 的技能正文并入本项目，本项目成为浏览器任务的默认入口。
 ego-browser 的指南仍由 `ego-browser skill` 打印（v2.2.1），所以只合并**稳定契约**：
 车道划分、轮次收尾、升级守卫。裁决写在 [references/bridge.md](references/bridge.md)。
 
 | 项 | 结果 |
 | --- | --- |
-| 单测 | **99/99** 通过（v0.7 的 88 条 + 桥接 11 条） |
+| 单测 | **100/100** 通过（v0.7 的 88 条 + 桥接 11 条 + 门禁样本规则 1 条） |
 | 车道 | lint 从「禁 `page.*` 前缀」改为「禁输入类动作」；`page.snapshot/acceptDialog/setInputFiles/selectOption/waitForEvent/keyboard.paste` 放行，`page.click/fill/mouse/keyboard.type` 仍拦；`create()` 之前的引导导航放行 |
 | 收尾 | 新增 `h.finish()`（先 flush 再 `task.finish`）与 `h.handOff()`（先 flush 再 `task.handOff`），都幂等；`flush()` 幂等，连调不再二次 `endRun` / 二次 close（此前会抛 `ERR_INVALID_STATE`） |
 | 所有权 | 修正映射：`user → claimTaskSpace`、`agentDelegatedToUser → takeOverTaskSpace`（旧文档三处互斥） |
 | iframe | 同源 frame 递归下钻，累计偏移后按顶层视口给坐标；跨源 frame 抛 `frame-cross-origin`，不再一律 `s1-missing` |
 | 视觉通道 | `h.inspect.screenshot()` + `h.click({x,y})`；坐标点击打 `direct` 标记，不参与落点断言（门禁输出里显示 `n/a（N 个坐标点击）`） |
 | 门禁 | `type-cv` 改为「最长序列 ≥ 8 个间隔才断言」，样本不足记 n/a：5 个字符的 CV 落在 0.09 是常事，旧规则会误判 |
-| 入口 | `~/.agents/skills/ego-browser` 重指到本仓库 `skill/ego-browser/SKILL.md`（兼容壳），`tools/link-skill.mjs` 可建立/检查/撤销 |
+| 入口 | 两个技能共存，以本技能为准；**不改 ego-browser 目录、不镜像它的文件**（各机器路径不同，升级换目录）。路径一律由 `tools/where.mjs` 运行时解析 |
+| 路径自检 | `node tools/where.mjs` 打印仓库路径、`importUrl`、ego lite 技能目录（从宿主注册的 ego-browser 链接解析）与 `egoReferences` |
 | 离线闭环 | `examples/timeline.mjs` 改为 data: 页面，不联网、不跳站；`parseUrl` 把 `data/about/file/blob` 归并为 host `local` |
 
 ### 真机实测（2026-11-13，离线 data: 页面）

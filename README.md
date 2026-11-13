@@ -1,10 +1,11 @@
 # ego-human-input
 
-浏览器操作的**唯一入口**：给 [ego-browser（ego-lite）](https://github.com/CitroLabs/ego-lite)
+浏览器操作的**默认入口**：给 [ego-browser（ego-lite）](https://github.com/CitroLabs/ego-lite)
 补上「一双手」，让 agent 的点击、输入、滚动落在人类行为的分布里，而不是靠限速器祈祷。
 
-它同时承担原来 ego-browser 技能的调用契约（空间与轮次、观察、系统级操作），
-业务脚本只加载这一个技能即可。ego-browser 的版本匹配指南仍由 `ego-browser skill` 打印。
+它同时承担原来 ego-browser 技能的调用契约（空间与轮次、观察、系统级操作）。
+ego-browser 的版本匹配指南仍由 `ego-browser skill` 打印；两个技能同时存在时以本技能为准，
+但**不改、不镜像 ego-browser 的文件**——它的安装路径逐台机器不同，升级还会换目录。
 
 它是一层输入库，装成 skill 由 AI 加载，也能被业务脚本直接 `import`。
 
@@ -172,7 +173,7 @@ node tools/verify-human.mjs --db <path>        # 指向另一份库
 剩下的两件事写在 [docs/architecture.md](docs/architecture.md)：阈值仍是没有真人样本校准的工程值，
 以及**一次复测不等于统计结论**，跨站点、跨意图还要多跑。
 
-单测 99 条：`node --test "tests/*.test.mjs"`。其中 11 条是桥接层回归
+单测 100 条：`node --test "tests/*.test.mjs"`。其中 11 条是桥接层回归
 （收尾只落一次、交权顺序、车道划分、iframe 定位、noop 判定），见 [tests/bridge.test.mjs](tests/bridge.test.mjs)。
 
 ---
@@ -190,7 +191,7 @@ node tools/verify-human.mjs --db <path>        # 指向另一份库
 | 5 | v0.5 | 站点知识：经验按 平台 + 意图 + 类型 归档 | 同意图去重只加 `hits`；配方失败自动落坑 | 经验不能跨站复用 |
 | 6 | v0.6 | 可判定：观测字段、冻结阈值、门禁、经验分层、迭代台账 | 37 条单测；合成回放样例门禁 6/6 | 会话形状、分布形状、哨兵暴露面 |
 | 7 | v0.7 | 会话与分布：落地先看、休息、日总量、读写配比；对数正态时序 + 相邻相关；间隔序列进观测；哨兵去痕迹；契约层可注入测试 | 88 条单测，门禁 11 条断言 | 阈值未经真人样本校准；真站未复测 |
-| 8 | **v0.8（当前）** | 合并 ego-browser：车道划分、轮次收尾（`finish` / `handOff`）、`flush` 幂等、同源 iframe、视觉通道、lint 改按动作名禁 | 99 条单测；11 条门禁；离线实测 11/11（validation.md） | ego-browser 指南升级后需重跑一遍单测与 lint |
+| 8 | **v0.8（当前）** | 合并 ego-browser：车道划分、轮次收尾（`finish` / `handOff`）、`flush` 幂等、同源 iframe、视觉通道、lint 改按动作名禁 | 100 条单测；11 条门禁；离线实测 11/11（validation.md） | ego-browser 指南升级后需重跑一遍单测与 lint |
 | 9 | 下一级 | 自迭代收敛：改动→判定→留下或回退，无需人介入 | 迭代台账里连续多代 `kept` 且分项不退化 | — |
 
 > **case：第三次拦截怎么变成了第二级**
@@ -280,7 +281,7 @@ await h.finish();                 // 先落盘，再关空间；要留页面给�
 ```bash
 node tools/lint-script.mjs examples/liepin-search.mjs   # 跑前扫一遍写路径
 node tools/verify-human.mjs                              # 跑后过一遍门禁
-node tools/link-skill.mjs                                # 把 ~/.agents/skills/ego-browser 指到本仓库的兼容壳
+node tools/where.mjs                                     # 路径自检：本仓库 / importUrl / ego lite 的 references
 ```
 
 ---
@@ -292,9 +293,7 @@ node tools/link-skill.mjs                                # 把 ~/.agents/skills/
 | [SKILL.md](SKILL.md) | 给 agent：什么时候加载、API、车道、收尾 |
 | [references/bridge.md](references/bridge.md) | 给 agent 和维护者：与 ego-browser 的边界、冲突裁决、升级守卫 |
 | [references/guard.md](references/guard.md) / [references/profiles.md](references/profiles.md) | 给调参的人：判定规则与档案字段 |
-| [skill/ego-browser/SKILL.md](skill/ego-browser/SKILL.md) | 兼容壳：`~/.agents/skills/ego-browser` 的链接目标，只做跳转 |
-| [docs/architecture.md](docs/architecture.md) | 给维护者：分层契约、缺口、优先级 |
-| [validation.md](validation.md) | 给验收：每个版本怎么验的、结果是什么 |
+| [docs/architecture.md](docs/architecture.md) | 给维护者：分层契约、缺口、优先级 || [validation.md](validation.md) | 给验收：每个版本怎么验的、结果是什么 |
 
 ## License
 

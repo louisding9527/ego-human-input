@@ -5,6 +5,8 @@ import assert from "node:assert/strict";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { create } from "../lib/human.mjs";
 import { openStore } from "../lib/store.mjs";
 import { createRandom } from "../lib/timing.mjs";
@@ -196,6 +198,17 @@ test("点进输入框只移动焦点不算 noop", async () => {
   assert.equal(result.ok, true);
   store.close();
   rmSync(file, { force: true });
+});
+
+test("where.mjs 打印可用的 importUrl，且不写死平台路径", () => {
+  const script = fileURLToPath(new URL("../tools/where.mjs", import.meta.url));
+  const out = execFileSync(process.execPath, [script], { encoding: "utf8" });
+  const info = JSON.parse(out);
+  assert.ok(info.skillDir.endsWith("ego-human-input"), info.skillDir);
+  assert.match(info.importUrl, /^file:\/\/\/.*lib\/human\.mjs$/);
+  assert.equal(info.platform, process.platform);
+  // ego lite 没装时是 null，装了就是绝对路径——两种都合法，不能是猜出来的相对路径
+  assert.ok(info.egoSkillsDir === null || info.egoSkillsDir.startsWith("/") || /^[A-Za-z]:[\\/]/.test(info.egoSkillsDir));
 });
 
 test("BOX_FN 下钻同源 frame，跨源 frame 明确标记而不是假装找不到", () => {
