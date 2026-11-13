@@ -281,6 +281,44 @@ test("连续搜索到配额仍不开详情就停手", async () => {
   }
 });
 
+test("waitFor 支持 role 定位符，超时返回 false 不抛", async () => {
+  const h = harness({ boxes: { "role:button[name='搜 索']": { ...BOX } } });
+  const s = await session(h);
+  try {
+    assert.deepEqual(await s.handle.waitFor("role:button[name='搜 索']"), { ok: true });
+    assert.deepEqual(await s.handle.waitFor("role:button[name='没有']", { timeout: 400 }), { ok: false });
+    assert.match(s.events().at(-1).flags, /s9-timeout/);
+  } finally {
+    s.close();
+  }
+});
+
+test("配方缺参数时拒绝执行，不把空串打进输入框", async () => {
+  const h = harness();
+  const s = await session(h);
+  try {
+    s.store.saveRecipe({
+      host: "liepin.com",
+      intent: "search",
+      steps: [
+        { op: "type", text: "{{kw}}" },
+        { op: "press", key: "Enter" },
+      ],
+    });
+    await assert.rejects(
+      () => s.handle.run("search", {}),
+      (error) => error.payload?.trigger === "missing-param" && error.payload.params.includes("kw"),
+    );
+    assert.equal(h.calls.types.length, 0, "缺参数时一个字符都不该发出去");
+
+    const result = await s.handle.run("search", { kw: "供应链" });
+    assert.equal(result.intent, "search");
+    assert.equal([...h.calls.types, ...h.calls.inserts].join(""), "供应链");
+  } finally {
+    s.close();
+  }
+});
+
 test("inspect 只读且哨兵可查", async () => {
   const h = harness();
   const s = await session(h);

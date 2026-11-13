@@ -8,7 +8,9 @@ import { intervalCv, sequenceRepeatRate, editDistance, scoreMetrics, classifySco
 import { openStore } from "../lib/store.mjs";
 import { createMachine, STATES } from "../lib/alert.mjs";
 import { lintSource } from "../tools/lint-script.mjs";
-import { interpolate, validateSteps } from "../lib/recipe.mjs";
+import { interpolate, validateSteps, missingParams, MissingParamError } from "../lib/recipe.mjs";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 const tmpDb = () => join(tmpdir(), `hi-test-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.db`);
 
@@ -191,6 +193,12 @@ test("recipes interpolate params, validate ops and version up", () => {
   const filled = interpolate(steps[1], { kw: "供应链总监" });
   assert.equal(filled.text, "供应链总监");
 
+  // 缺参数：默认仍是宽松替换，strict 才抛，run() 走 strict。
+  assert.equal(interpolate(steps[1], {}).text, "");
+  assert.throws(() => interpolate(steps[1], {}, { strict: true }), MissingParamError);
+  assert.deepEqual(missingParams(steps, {}), ["kw"]);
+  assert.deepEqual(missingParams(steps, { kw: "x" }), []);
+
   assert.ok(validateSteps([{ op: "nope" }]).length > 0);
   assert.ok(validateSteps([{ op: "click" }]).length > 0);
 
@@ -230,4 +238,11 @@ test("lint blocks non-human writes and allows reads", () => {
     '// page.evaluate is documented here only',
   ];
   for (const line of good) assert.equal(lintSource(line).length, 0, `unexpected violation: ${line}`);
+});
+
+test("examples 里的脚本过 lint", () => {
+  for (const file of ["examples/liepin-search.mjs", "examples/timeline.mjs"]) {
+    const source = readFileSync(fileURLToPath(new URL(`../${file}`, import.meta.url)), "utf8");
+    assert.deepEqual(lintSource(source), [], `${file} 有违规写法`);
+  }
 });
