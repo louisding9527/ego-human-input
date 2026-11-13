@@ -10,6 +10,13 @@ v0.2 起，所有动作都要过三道关：禁令、异常目录、预警状态
 
 **禁止**：DOM `click()`、`dispatchEvent`、`form.submit()`、直接写 `value`/`innerHTML`/`checked`、`page.fetch`、新发 XHR、改 storage/cookie、`scrollIntoView` 瞬移、操作非前台标签页、点不可见元素、`insertText` 一次注入 >12 字符。
 
+页面哨兵（v0.7 起）只装 `addEventListener` 与 `MutationObserver`：
+不挂全局对象、不改 `value` 的原型 setter、不包 `fetch`/`XHR`。
+状态留在安装函数的闭包里，只能通过一次随机名 `CustomEvent` 读回；通道被堵时
+`readSentinel()` 返回 `null`，调用方记 `degraded: no-channel`，不假装读到 0。
+静默写检测改为「信任输入时间戳 + 值变化比对」：读取时扫一遍输入控件，
+值变过且 200ms 内没有信任输入才算一次旁路写入。
+
 静态检查：
 
 ```bash
@@ -29,6 +36,8 @@ node tools/lint-script.mjs your-script.mjs
 | read | 停顿、滚轮 | 不计 | — |
 
 配额按 `小时 + 域名 + 类型` 存 sqlite，跨进程生效。超限抛 `HumanWarn`。
+配额是预留-确认两段式：闸门先预留，定位失败 / 元素不可点 / 首键即失败会把预留还回去，
+只有真的发生交互才计入用量。
 
 ## 3. 搜索专项
 
@@ -36,7 +45,8 @@ node tools/lint-script.mjs your-script.mjs
 
 提交那一下用 `{as:"search"}` 标记，配额与统计才会记到搜索头上。
 
-- 连续 3 次搜索且期间没开详情 → 停（S17）。
+- 连续 3 次搜索且期间没开详情 → 停（S17，v0.7 起由闸门硬拦，抛 `search-no-detail`）。
+  数值取档案里 `search.requireDetailAfter`，不是写死的。
 - 与上次关键词编辑距离 <2 → 记 `s18-near-dup`，计入密度不计次数。
 - 结果指纹与前次相同 → 标 `suspect_cache`（S16），连续 2 次停。
 
@@ -79,7 +89,25 @@ HALTED --到点--> NORMAL
 
 冻结期间 `gate()` 抛 `HumanWarn`，`inspect` 与 sqlite 读照常。
 
-评分：search_burst 30、search_no_detail 25、search_same_fp 20、search_interval_cv 15、chain_repeat 15、fail_rate 15、alerts_7d 10、orphan_request 5/次（上限 15）、silent_write 5/次（上限 10）。
+评分：search_burst 30、search_no_detail 25、search_same_fp 20、search_interval_cv 15、chain_repeat 15、fail_rate 15、alerts_7d 10、silent_write 5/次（上限 10）。
+
+> v0.7 去掉了 orphan_request 项：它的来源是包装 `fetch`/`XHR`，那层钩子本身就是可探测痕迹，
+> 一并删了。新发请求由 lint 的 B3 规则在脚本侧拦住。
+
+## 5.1 会话层
+
+动作级闸门之外，一个 run 还要维持「坐下来干活」的形状（数值在 `profiles/base.json` 的 `session` 段）：
+
+| 规则 | 触发 | 越界 |
+| --- | --- | --- |
+| 落地先看 | `create()` 返回前 | dwell 0.8–2.5s |
+| 休息 | 每 `restEveryActions` 个动作 | 停 `restMs` |
+| 读写配比 | `readWriteRatioMin` 不达标 | 写动作前自动补一次 `autoReadMs` 短阅读 |
+| 单次时长 | `maxMinutes` | 抛 `session-long` |
+| 日总量 | 当日动作数 ≥ `dailyActionsMax` | 抛 `daily-quota` |
+| 工作时段 | 落在 `activeHours` 之外 | 间隔乘 `offHoursGapFactor` |
+
+这些值进 `observe()` 的 `session` 块，再由门禁断言（dwell / session-length / daily-actions）。
 
 ## 6. 查看与裁决
 
@@ -100,7 +128,7 @@ node tools/alert.mjs decide --id 12 --decision abort --reason "3 轮同序列"
 | 表 | 内容 |
 | --- | --- |
 | `runs` | 每次脚本执行 |
-| `events` | 每个动作：时间、路径、类型、目标哈希、成败、耗时、标志、关键词哈希、结果指纹 |
+| `events` | 每个动作：时间、路径、类型、目标哈希、成败、耗时、标志、关键词哈希、结果指纹、落点/移动点数/路径长度、`meta` 间隔序列 |
 | `alerts` | 预警：触发、证据、规则结论、最终结论、决策人 |
 | `budget_use` | 小时配额用量 |
 | `host_state` | 站点冷却状态 |

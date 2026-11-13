@@ -2,7 +2,7 @@
 name: ego-human-input
 description: 让 ego-browser（ego-lite）的鼠标键盘行为接近真人，并按站点控制操作频率。当任务涉及浏览器自动化、拟人输入、防反爬、控制点击与输入节奏、页面浏览停顿、滚轮滚动时使用。不用于指纹伪造、验证码绕过或多账号轮换。
 metadata:
-  version: "0.6.0"
+  version: "0.7.0"
   date: "2026-11-13"
 ---
 
@@ -39,7 +39,7 @@ const task = await taskSpace("liepin 候选人筛选");
 const page = task.page("p1");
 await page.goto("https://www.liepin.com/");
 
-const h = await human.create(page);   // 识别站点，加载档案
+const h = await human.create(page);   // 识别站点、体检、装哨兵，落地先停留一会儿再返回
 console.log(h.site());                          // { host, siteKey, profile }
 console.log(h.health.warnings);                 // 体检告警，空数组为正常
 
@@ -54,7 +54,8 @@ console.log(await h.flush());                   // 落盘时间线与限速状�
 
 | 方法 | 说明 |
 | --- | --- |
-| `create(page, { profile?, dbPath?, store? })` | 识别站点、体检、装哨兵、起 run、接管冷却；返回句柄 |
+| `create(page, { profile?, dbPath?, store? })` | 识别站点、体检、装哨兵、起 run、接管冷却；先 dwell 再返回 |
+| `h.session()` | 本次会话形状：dwell、时长、读写数、自动补读次数、休息次数 |
 | `h.site()` / `h.params()` / `h.health` | 站点档案 / 生效参数 / 环境体检 |
 | `h.goto(url)` | 导航入口，先判 URL 与 API 端点 |
 | `h.click(target, {as})` | 指针轨迹点击；`as` 决定配额类型 |
@@ -62,7 +63,7 @@ console.log(await h.flush());                   // 落盘时间线与限速状�
 | `h.type(text, {as})` | 分拉丁/中文，含误输入与退格 |
 | `h.press(key)` | 单次按键，`ControlOrMeta+A` 这类同 Playwright |
 | `h.clearField()` | 全选 + 退格，清空当前输入框 |
-| `h.waitFor(locator, {state,timeout})` | 等元素出现，超时返回 `{ok:false}` 不抛 |
+| `h.waitFor(locator, {state,timeout})` | 等元素出现（css/href/role 都支持），超时返回 `{ok:false}` 不抛 |
 | `h.read(seconds?)` / `h.scroll()` | 停顿加滚轮 / 单独滚一次 |
 | `h.note({area,text,selector})` / `h.notes(area?)` | 记录、读取当前站点的交互经验 |
 | `h.inspect.*` | 只读：`rect / text / pageState / sentinel / requests / query` |
@@ -105,12 +106,32 @@ node tools/recipe.mjs list --host h.liepin.com
 node tools/recipe.mjs show --host h.liepin.com --intent search
 ```
 
+## 会话节奏由库管，不用你算
+
+一个 run 就是「坐下来干一次活」，库自己维持下面这些形状（数值在 `profiles/base.json` 的 `session` 段）：
+
+| 行为 | 触发 | 越界时 |
+| --- | --- | --- |
+| 落地先看 | `create()` 返回前 | 固定 dwell 0.8–2.5s |
+| 休息 | 每 60 个动作 | 停 20–45s |
+| 读写配比 | 写动作前发现读太少 | 自动补一次 1 秒短阅读，记 `autoReads` |
+| 单次时长 | 超过 90 分钟 | 抛 `session-long`，换一次 run 重来 |
+| 日总量 | 当日超过 400 个动作 | 抛 `daily-quota`，当天停手 |
+| 工作时段 | 8 点前 / 23 点后 | 间隔乘 1.8，不变的是不让你在凌晨猛干 |
+| 只搜不开 | 连续 3 次搜索仍没开详情 | 抛 `search-no-detail` |
+
+意思很直接：**慢是设计，不是故障**。看到脚本"卡"两秒，那是 dwell 或自动补读，
+不是 BUG；`h.session()` 能看到补了几次。
+
 ## 必须知道的四个事实
 
 1. **不要用 `mouse.move` 的 `steps` 做拟人。** 它在一次 CDP 调用内插值，事件时间戳几乎相同。本库是逐点调用并真实等待。
 2. **中文没有逐键事件。** `keyboard.type` 对中文只能整段合成。本库按词组 `insertText`，组间 300~1200ms，模拟输入法上屏。
 3. **坐标可能拿不到。** `snapshot` 有 `loc=` 但没有坐标。本库尝试解析 `css:` / `href:` / `role:`，解析不到就抛 `s1-missing`，**不降级成 `page.click`**。降级等于以为在拟人、其实在跳变，所以要改定位符，不要绕过。
 4. **挑战页要交给人。** 检测到验证码或 Cloudflare 挑战时抛 `HumanBlocked`。不要重试、不要换 profile、不要绕。
+
+配方还有一个硬规矩：`{{kw}}` 这类占位符缺参数时直接抛 `missing-param`，
+**不会把空串打进输入框**。看到这个错，补参数，别改代码绕过。
 
 ## 禁止事项
 
@@ -145,7 +166,8 @@ node tools/verify-human.mjs --run <id>          # 指定 run
 node tools/verify-human.mjs --baseline <id>     # 与基线对照，任一分项退化 >5% 判失败
 ```
 
-六条断言：非信任输入为 0、无降级、落点不扎堆中心、落点中位偏移、移动采样点下限、读写比下限。
+十一条断言：非信任输入为 0、无降级、落点不扎堆中心、落点中位偏移、移动采样点下限、
+步长间隔 CV、按键间隔 CV、读写比下限、首动作前停留、会话时长上限、当日动作总量。
 失败退出码为 1。阈值冻结在 `profiles/thresholds.json`，**agent 不许改**。
 
 改动参数或配方后要记账，改了什么、为什么、门禁前后如何：

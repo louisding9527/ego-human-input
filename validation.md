@@ -110,6 +110,35 @@ result cards: 30
 
 ---
 
+# v0.7（2026-11-13）会话与分布
+
+把 architecture.md 里审计出的六处缺口补完。全部是本地可复跑的测试，**没有真站复测**。
+
+| 项 | 内容 |
+| --- | --- |
+| 分层 | `human.mjs` 729 → 254 行；拆出 browser / page-fns / locator / actions / recipes / session；四个依赖可注入 |
+| 会话 | `lib/session.mjs`：dwell、单次时长、日总量、休息、工作时段、读写配比；`requireDetailAfter` 从死配置变闸门规则 |
+| 哨兵 | 去掉全局对象、原型 setter、fetch/XHR 包装；随机名事件读回；静默写改「信任时间戳 + 值比对」 |
+| 配额 | 预留-确认两段式，失败路径 `budgetRelease`；顺手修掉令牌桶 state 未写回（限速此前实际没生效） |
+| 时序 | `lib/timing.mjs` 对数正态 + AR(1)；全链路走注入的 timing |
+| 观测 | `events.meta` 存间隔序列；`observe` 出中位 CV |
+| 门禁 | 6 条 → 11 条：加步长 CV、按键 CV、首动作 dwell、会话时长、日总量 |
+| 小修 | `waitFor` 支持 role、插值严格模式（缺参抛 `missing-param`）、`limit_n` 冲突更新、lint 进测试 |
+
+实测：
+
+| 项 | 结果 |
+| --- | --- |
+| 单测 | 78/78 通过（v0.6 的 37 条 + 新增 41 条） |
+| 新增覆盖 | 动作层 11 条、适配层 4 条、会话层 9 条、哨兵 5 条、时序 7 条、其余 5 条 |
+| 断言数 | `verify-human` 11 条；缺数据（没有落点序列/没有起止时间）一律判 FAIL，不给「没观测=合格」 |
+| 合成回放样例 | 11/11 通过；**事件流是造的，仅验证机制** |
+| 历史 run | 仍会 FAIL：老数据没有 `meta` 与 `meta` 序列，追认不了 |
+| 令牌桶 | 修复后 `rate.perMinute` 才真正生效；此前 `take()` 的 state 没有写回，限速形同虚设 |
+| 未验证 | 真站节奏、真人样本校准、多进程并发配额；见 docs/architecture.md §4 |
+
+---
+
 # 复跑命令
 
 ```bash

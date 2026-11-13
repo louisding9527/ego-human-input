@@ -9,47 +9,61 @@
 业务脚本 / agent
       │  只依赖 lib/human.mjs 的句柄
       ▼
-┌──────────────────────────────────────────┐
-│ 契约层  lib/human.mjs                     │  create() → 句柄；页面引用不外泄（写路径）
-│  ├ 闸门   gate()：预警态 / 小时配额 / 间隔 │
-│  ├ 动作   click / focus / type / press /  │
-│  │        clearField / waitFor / read /   │
-│  │        scroll / goto / move            │
-│  ├ 校验   checkAfterAction()：URL 分类 /  │
-│  │        挑战页 / 软提示 / 哨兵 / noop   │
-│  └ 编排   配方执行、经验落库               │
-└──────────────────────────────────────────┘
-      │                                │
-      ▼                                ▼
-┌───────────────────┐        ┌──────────────────────┐
-│ 纯函数层（无 I/O） │        │ 状态层               │
-│ trace  轨迹         │        │ store  SQLite 读写    │
-│ keyboard 键盘计划   │        │ alert  四态状态机     │
-│ score  风险聚合     │        │  裁决来源 rule/agent/│
-│ recipe 插值与校验   │        │  timeout             │
-│ bucket 令牌桶       │        └──────────────────────┘
-│ profile 站点解析    │                │
-│ guard  URL 判定     │                ▼
-│ notes  经验分层     │        ┌──────────────────────┐
-│ observe 观测折算    │        │ 数据层               │
-│ verify 断言与对照   │        │ profiles/*.json      │
-└───────────────────┘        │ thresholds.json      │
-                              │ ~/.ego-human-input/  │
-                              │   human.db (WAL)     │
-                              │   timeline-*.jsonl   │
-                              └──────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│ 契约层  lib/human.mjs（254 行）                            │
+│  装配：配置 → 站点档案 → store → 状态机 → 动作层 → 会话层   │
+│  闸门  gate()：会话形状 / 冷却 / 配额预留 / 间隔 / 令牌桶   │
+│  落库  logAction()：events + timeline                     │
+│  配方  lib/recipes.mjs：意图执行、经验落库                 │
+└──────────────────────────────────────────────────────────┘
+      │                          │                    │
+      ▼                          ▼                    ▼
+┌────────────────────┐  ┌──────────────────┐  ┌────────────────────┐
+│ 动作层 actions.mjs │  │ 会话层 session.mjs│  │ 适配层 browser.mjs │
+│ 指针/按键、落点、  │  │ dwell、时长、日   │  │ 唯一接触 Page 的   │
+│ 事后校验、巡检     │  │ 总量、休息、读写比│  │ 地方；page-fns     │
+└────────────────────┘  └──────────────────┘  └────────────────────┘
+      │                          │                    │
+      ▼                          ▼                    ▼
+┌──────────────────────────────────────────────────────────┐
+│ 纯函数层（无 I/O）                                         │
+│ trace 轨迹 · keyboard 键盘计划 · timing 时序采样           │
+│ score 风险聚合 · recipe 插值校验 · bucket 令牌桶           │
+│ profile 站点解析 · locator 定位符 · guard URL 判定与哨兵    │
+│ observe 观测折算 · verify 断言与对照 · notes 经验分层       │
+└──────────────────────────────────────────────────────────┘
+      │
+      ▼
+┌──────────────────────────────────────────────────────────┐
+│ 状态层 store.mjs（SQLite WAL） · alert.mjs（四态状态机）    │
+│ 数据：profiles/*.json · thresholds.json · ~/.ego-human-input│
+└──────────────────────────────────────────────────────────┘
 ```
 
 依赖方向单向向下：纯函数层不得 import 状态层，状态层不得 import 契约层。
-`human.mjs` 是唯一可以同时看到页面、状态与纯函数的地方。
+`browser.mjs` 是唯一 import `page-fns.mjs` 的地方；`actions.mjs` 只认 `browser` 的方法名，
+因此换成假的 browser 就能跑全链路测试。
 
 ## 2. 契约
 
 **句柄**。业务脚本 `import lib/human.mjs` 拿到 `h`。写操作只能经 `h.*`，读操作经 `h.inspect.*`。
 业务脚本确实持有 `page`（ego-lite 的 `task.page()`），但 lint 会拦住 `page.*` 的写路径。
 
-**动作**。每个动作依次经过：闸门 → 定位 → 前置校验 → 指针/按键 → 事后校验 → 落库。
-任一环节失败抛 `HumanWarn` 或 `HumanBlocked`，**不降级**。
+**注入**。`create(page, { browser?, sleep?, rand?, now?, store?, dbPath? })`。
+四个依赖都可替换：假 browser 跑行为测试，假 sleep 跳过真实等待，固定 rand 复现采样，假 now 控制时钟。
+
+**动作**。每个动作依次经过：会话闸门 → 冷却/配额/间隔 → 定位 → 前置校验 → 指针/按键 → 事后校验 → 落库。
+任一环节失败抛 `HumanWarn` 或 `HumanBlocked`，**不降级**。配额是预留-确认两段式，
+没发生指针交互的失败会 `budgetRelease` 还回去。
+
+**会话**。`session.before(action)` 管六件事：单次时长、日总量、休息间隔、工作时段衰减、读写配比、
+以及「连续搜索到配额仍不开详情」。形状（dwell、时长、动作数）经 `observe()` 进断言。
+
+**时序**。所有等待与间隔走 `lib/timing.mjs`：区间内对数正态 + 同 key 的 AR(1) 相关。
+动作层与契约层不得直接调 `Math.random`（有测试盯着）。
+
+**观测**。`events.meta` 存动作内部的间隔序列（点击的采样点间隔、按键间隔、滚动分段位移与间隔），
+`observe()` 折算成中位 CV，`verify` 据此断言「不是等距」。
 
 **判定**。`tools/verify-human.mjs` 只读冻结阈值，不读运行时覆盖。
 agent 可以改参数、配方、经验，不可以改阈值。
@@ -60,72 +74,46 @@ agent 可以改参数、配方、经验，不可以改阈值。
 **迭代**。`iterations` 一行 = 一次改动。`generation` 同一 (site, intent) 内递增。
 状态 `pending | kept | reverted`，改动后必须过一次门禁才能 `kept`。
 
-## 3. 已知缺口
+## 3. v0.7 补完的缺口
 
-按「影响判定可信度」排序。每条给出可验收的完成标准。
+审计出的六项全部落地，每项都有可跑的测试，不再靠真站试错。
 
-### P0-1 契约层未拆分，无自动化覆盖
+| 缺口 | 做法 | 验收 |
+| --- | --- | --- |
+| 契约层未拆分、无自动化覆盖 | 拆成 browser / page-fns / locator / actions / recipes / session；`human.mjs` 729 → 254 行 | `tests/actions.test.mjs`（11 条，闸门顺序与失败路径）、`tests/browser.test.mjs`（4 条，参数形状） |
+| 会话层不存在 | `lib/session.mjs`：dwell、时长、日总量、休息、工作时段、读写配比；`requireDetailAfter` 从死配置变闸门规则 | `tests/session.test.mjs`（9 条）；门禁三条会话断言 |
+| 页面哨兵自身可被探测 | 去掉 `window.__hi`、原型 setter、fetch/XHR 包装；状态在闭包里，随机名事件读回；静默写改「信任时间戳 + 值比对」 | `tests/sentinel.test.mjs`（5 条，含「全局命名空间必须干净」） |
+| 时间分布均匀 | `lib/timing.mjs` 对数正态 + AR(1)；全链路改走注入的 timing | `tests/timing.test.mjs`（7 条，中位数/尾部/中段占比/相关性） |
+| 观测粒度只到单次动作 | `events.meta` 存间隔序列；`observe` 出中位 CV；门禁加两条 CV 断言 | 同上 + `tests/human-likeness.test.mjs` 的等距反例 |
+| 配额在定位前扣除 | `gate()` 返回预留句柄，失败路径 `release()` | `tests/actions.test.mjs` 的三条失败路径 + `tests/guard.test.mjs` 的用量归还 |
+| 四处小不一致 | `waitFor` 支持 role、插值严格模式、`limit_n` 冲突更新、lint 进测试 | `tests/actions.test.mjs`、`tests/guard.test.mjs` |
 
-`lib/human.mjs` 约 660 行，一个 `create()` 闭包同时承担闸门、动作、校验、编排、落库。
-没有 page 适配器，行为测试无从下手，现有 37 条单测全部只覆盖纯函数层。
+## 4. 仍然缺的
 
-完成标准：`create()` 接收可注入的 page 替身；`click/type/read` 的闸门顺序、失败路径、
-落库字段在无浏览器环境下有测试；`human.mjs` 降到 300 行以内。
+**真人样本校准**。所有阈值都是工程值（`thresholds.json` 里 `calibrated: false`）。
+落点偏移 3px、CV 0.15/0.2、dwell 300ms 这些数字没有依据真人数据，只是「明显非机器」的下限。
+校准方法：录真实浏览器会话的指针与按键间隔，取低分位数作为下限；在此之前，宁可标注「未校准」也不假装精确。
 
-### P0-2 会话层不存在
+**真站复测**。v0.7 的改动全部只在合成事件流与假浏览器上验证过。
+落地先看、休息间隔、自动补阅读都会改变脚本的实际节奏，必须拿真实站点跑一轮，
+再用 `verify-human` 判一次，结果写进 [validation.md](../validation.md)。没跑之前不许写成「已达标」。
 
-现在只有动作级与小时级控制。缺：落地后先看的 dwell、读写配比约束、单会话作业时长上限、
-日总量配额、工作时段衰减、休息间隔。`profile.requireDetailAfter` 写在配置里但从未被消费。
+**并发配额**。`budget_use` 是「读一次再写一次」，多进程同时起跑仍可能一起过限。
+要真锁就得用 SQLite 事务（`BEGIN IMMEDIATE`）把读改写包起来，代价是写锁竞争。
+当前按单进程使用设计，多进程场景记在文档里，不假装没有。
 
-完成标准：一个 run 的会话形状可被 `observe()` 算出（首动作前 dwell、会话时长、日累计动作数），
-且 `verify-human` 对其有断言。`requireDetailAfter` 要么实现、要么从配置删除。
+**会话与配方的交互**。自动补阅读插在写动作前，会改变配方的时间轴。
+目前只在 `nav/write/search/detail` 四类动作前触发，短读 1–2 秒；
+如果真站复测发现它会打乱某些流程，admission 条件需要收窄。
 
-### P0-3 页面哨兵自身可被探测
+## 5. 优先级
 
-`guard.mjs` 注入的 `window.__hi`、对 `HTMLInputElement.prototype.value` 的 setter 覆写、
-对 `fetch`/`XHR.send` 的包装，都能被页面脚本枚举到。自审机制本身成了自动化痕迹。
+1. 真站复测（P0）——v0.7 的所有改动都还没有真实流量背书。
+2. 真人样本校准阈值（P1）——决定「像人」的下限是拍脑袋还是有依据。
+3. 并发配额事务化（P2）——只有多进程并用时才需要。
+4. 会话与配方的交互收窄（P2）——看复测结果再决定。
 
-完成标准：页面内只保留 `addEventListener` 与 `MutationObserver`（不可枚举）；
-静默写检测改用「信任输入时间戳 + 值变化比对」，不再改原型。
-
-### P1-1 时间分布是均匀的
-
-`range()` 全部均匀采样。真人按键间隔近似对数正态，且相邻间隔相关。均匀分布可被时序统计识别。
-
-完成标准：`trace.mjs` / `keyboard.mjs` 提供 `lognormal` 采样族，单测断言分位数落在目标区间，
-且相邻样本相关性为正；`human.mjs` 不再直接调用 `Math.random`，统一走注入的 `rng`。
-
-### P1-2 观测粒度只到单次动作
-
-已记录落点偏移、移动点数、路径长度。缺速度曲线、按键间隔序列、滚动分段时长。
-L2 回归只能比中位数，比不了分布形状。
-
-完成标准：`events` 增加可选的 `meta` JSON 列，按动作类型存最小必要序列；
-`verify` 能对间隔序列做分位断言。
-
-### P1-3 配额在定位前扣除
-
-`click()` 先 `gate()` 再定位。目标不存在时抛 `s1-missing`，配额照样消耗。
-
-完成标准：配额改为预留-确认两段式；失败路径释放预留。单测覆盖。
-
-### P2-1 小的不一致
-
-- `waitFor` 只支持 `css=` / `href=`，`role=` 抛 `wait-needs-css`。
-- `recipe.interpolate` 缺参数时静默替换成空串，可能把空关键词打进输入框。
-- `budgetTake` 的 `limit_n` 在冲突时不更新；并发多进程仍会互相覆盖。
-- `tools/lint-script.mjs` 需手工跑，未接入任何自动步骤。
-
-## 4. 优先级
-
-1. P0-3（哨兵可探测）——不改反而有负作用，改动小。
-2. P1-3（配额两段式）——小而明确。
-3. P0-1（拆分 + 适配器）——解锁后续所有行为测试。
-4. P0-2（会话层）——决定「像人」能走多远。
-5. P1-1 / P1-2——分布质量与观测粒度。
-6. P2-1——顺手修。
-
-## 5. 不做什么
+## 6. 不做什么
 
 - 不做指纹伪造：真机、真 GPU、真登录态已经一致，改反而制造矛盾。
 - 不做验证码绕过：遇到挑战停手、留证据、交给人。
