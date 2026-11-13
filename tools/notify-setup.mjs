@@ -75,8 +75,15 @@ if (CHECK_ONLY) {
   process.exit(3);
 }
 
-// 注入一个明显的按钮，然后用真实鼠标点它：requestPermission 需要用户手势。
+// 注入一个明显的浮层，然后用真实鼠标点按钮：requestPermission 需要用户手势。
+// 关键：ego-lite 会在气泡出现时杀掉本脚本，之后没人来收尾——所以浮层必须自己清理。
 await page.evaluate(() => {
+  const cleanup = () => {
+    const existing = document.getElementById("ego-human-input-setup");
+    if (existing) existing.remove();
+  };
+  cleanup();
+
   const box = document.createElement("div");
   box.id = "ego-human-input-setup";
   box.style.cssText = [
@@ -90,7 +97,7 @@ await page.evaluate(() => {
   title.append("正在申请浏览器通知权限");
   const hint = document.createElement("div");
   hint.style.cssText = "color:#555;margin-bottom:12px";
-  hint.append("稍后会弹出授权气泡，请选择「允许」");
+  hint.append("浏览器会弹出授权气泡，请选择「允许」");
   const button = document.createElement("button");
   button.id = "ego-human-input-setup-btn";
   button.style.cssText = "padding:12px 26px;font-size:16px;background:#004369;color:#fff;border:0;border-radius:8px;cursor:pointer";
@@ -103,9 +110,26 @@ await page.evaluate(() => {
       window.__egoSetup.result = "error:" + String(error.message);
     }
   });
-  box.append(title, hint, button);
+  const close = document.createElement("button");
+  close.style.cssText = "position:absolute;right:6px;top:2px;border:0;background:transparent;color:#004369;font-size:18px;line-height:1;cursor:pointer;padding:4px 8px";
+  close.append("×");
+  close.addEventListener("click", cleanup);
+
+  box.append(title, hint, button, close);
   document.body.append(box);
+
+  // 45 秒后自愈：脚本多半已经被 ego-lite 杀掉，没人会来收这个浮层。
+  window.__egoSetupTimer = setTimeout(cleanup, 45000);
+  window.__egoSetupWatch = setInterval(() => {
+    if (Notification.permission !== "default") {
+      clearInterval(window.__egoSetupWatch);
+      clearTimeout(window.__egoSetupTimer);
+      setTimeout(cleanup, 1500);
+    }
+  }, 500);
+  window.addEventListener("pagehide", cleanup, { once: true });
 });
+await page.waitForTimeout(200);
 
 const rect = await page.evaluate(() => {
   const el = document.getElementById("ego-human-input-setup-btn");

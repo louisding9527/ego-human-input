@@ -176,6 +176,8 @@ Enter 成 chip → 点「搜 索」→ 读 6s。
 | ego-lite 的反应 | **主动停下脚本**并报 `A browser permission prompt for notifications has appeared`，空间转为 `agentDelegatedToUser` |
 | 引导工具 | `tools/notify-setup.mjs` 两步：先弹气泡，用户点「允许」，再 `--check` 验证并试发 |
 | 未授权时 | 时间线记 `notify {ok:false, reason:"permission:default"}`，门禁不受影响 |
+| 端到端 | 真站触发 `challenge-host` 熔断 → `notify {ok:true, reason:"sent"}`，系统通知真的弹出 |
+| 残留浮层 | 首次引导失败后浮层留在页面上：脚本被 ego-lite 杀掉，没人收尾 → 已改成自愈：45 秒自动移除、权限变化 1.5 秒后移除、右上角 × 可手动关 |
 
 结论：**通知链路可用，但授权必须是人点的那一下**。ego-lite 会在那一刻收走控制权，
 所以“一键完成授权”不成立，工具只能做成“弹出来 → 你点 → 再验证”。
