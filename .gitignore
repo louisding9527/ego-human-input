@@ -9,3 +9,7 @@ probe/
 *.log
 .DS_Store
 Thumbs.db
+
+# Trellis 脚本运行时产物
+__pycache__/
+*.pyc
