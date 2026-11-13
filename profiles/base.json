@@ -1,0 +1,54 @@
+{
+  "defaultProfile": "balanced",
+  "profiles": {
+    "strict": {
+      "rate": { "perMinute": 10, "burst": 2, "minGapMs": [1500, 4000] },
+      "budget": {
+        "search": { "perHour": 4, "gap": [60000, 150000] },
+        "detail": { "perHour": 5, "gap": [45000, 90000] },
+        "write": { "perHour": 6, "gap": [25000, 60000] },
+        "nav": { "perHour": 12, "gap": [12000, 35000] }
+      },
+      "search": { "maxConsecutive": 3, "nearDupDistance": 2, "requireDetailAfter": 3 },
+      "alert": { "windowMs": 1800000, "reviewTimeoutMs": 1800000 },
+      "mouse": { "trajectory": ["bezier", "jitter", "overshoot"], "samples": [12, 26], "stepMs": [8, 20], "landingJitterPx": 2, "clickDelayMs": [50, 110], "hoverMs": [80, 200] },
+      "keyboard": { "charMs": [70, 180], "spaceMs": [110, 260], "cjkGroupMs": [400, 1200], "typoEveryGroups": 2, "typoRate": 1 },
+      "scroll": { "deltaPx": [100, 320], "segments": [2, 4], "segmentMs": [100, 320] },
+      "pause": { "readMs": [7000, 11000], "leadInMs": [800, 2000], "scrollTimes": [1, 2] },
+      "guards": { "detectChallenge": true, "maxActionsPerPage": 40 }
+    },
+    "balanced": {
+      "rate": { "perMinute": 18, "burst": 2, "minGapMs": [800, 2400] },
+      "budget": {
+        "search": { "perHour": 6, "gap": [45000, 120000] },
+        "detail": { "perHour": 8, "gap": [30000, 60000] },
+        "write": { "perHour": 10, "gap": [15000, 40000] },
+        "nav": { "perHour": 20, "gap": [8000, 25000] }
+      },
+      "search": { "maxConsecutive": 3, "nearDupDistance": 2, "requireDetailAfter": 3 },
+      "alert": { "windowMs": 1800000, "reviewTimeoutMs": 1800000 },
+      "mouse": { "trajectory": ["bezier", "jitter", "overshoot"], "samples": [12, 26], "stepMs": [6, 16], "landingJitterPx": 3, "clickDelayMs": [40, 90], "hoverMs": [60, 160] },
+      "keyboard": { "charMs": [55, 150], "spaceMs": [90, 220], "cjkGroupMs": [300, 1200], "typoEveryGroups": 2, "typoRate": 1 },
+      "scroll": { "deltaPx": [120, 400], "segments": [2, 5], "segmentMs": [80, 300] },
+      "pause": { "readMs": [5000, 8000], "leadInMs": [500, 1500], "scrollTimes": [1, 2] },
+      "guards": { "detectChallenge": true, "maxActionsPerPage": 60 }
+    },
+    "fast": {
+      "rate": { "perMinute": 30, "burst": 3, "minGapMs": [400, 1200] },
+      "budget": {
+        "search": { "perHour": 10, "gap": [25000, 60000] },
+        "detail": { "perHour": 15, "gap": [15000, 40000] },
+        "write": { "perHour": 20, "gap": [8000, 25000] },
+        "nav": { "perHour": 30, "gap": [4000, 15000] }
+      },
+      "search": { "maxConsecutive": 5, "nearDupDistance": 1, "requireDetailAfter": 5 },
+      "alert": { "windowMs": 1800000, "reviewTimeoutMs": 1800000 },
+      "mouse": { "trajectory": ["bezier", "jitter"], "samples": [10, 18], "stepMs": [4, 10], "landingJitterPx": 4, "clickDelayMs": [30, 70], "hoverMs": [40, 100] },
+      "keyboard": { "charMs": [40, 100], "spaceMs": [70, 160], "cjkGroupMs": [200, 700], "typoEveryGroups": 3, "typoRate": 1 },
+      "scroll": { "deltaPx": [150, 500], "segments": [1, 3], "segmentMs": [60, 200] },
+      "pause": { "readMs": [3000, 5000], "leadInMs": [300, 900], "scrollTimes": [1, 1] },
+      "guards": { "detectChallenge": true, "maxActionsPerPage": 80 }
+    }
+  },
+  "unknown": { "profile": "strict", "overrides": {} }
+}
