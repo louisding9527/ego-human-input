@@ -54,8 +54,9 @@ console.log(await h.flush());                   // 落盘时间线与限速状�
 
 | 方法 | 说明 |
 | --- | --- |
-| `create(page, { profile?, dbPath?, store? })` | 识别站点、体检、装哨兵、起 run、接管冷却；先 dwell 再返回 |
+| `create(page, { profile?, dbPath?, store?, notify?, onBlock? })` | 识别站点、体检、装哨兵、起 run、接管冷却；先 dwell 再返回 |
 | `h.session()` | 本次会话形状：dwell、时长、读写数、自动补读次数、休息次数 |
+| `h.notifyPermission()` | 停手通知的授权状态（granted / default / denied / unsupported） |
 | `h.site()` / `h.params()` / `h.health` | 站点档案 / 生效参数 / 环境体检 |
 | `h.goto(url)` | 导航入口，先判 URL 与 API 端点 |
 | `h.click(target, {as})` | 指针轨迹点击；`as` 决定配额类型 |
@@ -143,6 +144,38 @@ node tools/recipe.mjs show --host h.liepin.com --intent search
 - 读用 `h.inspect.*`。业务脚本里不出现 `page.*`，跑前过一遍 `node tools/lint-script.mjs <脚本>`。
 - 不调用 `page.cdp("egoAutomated.disable")`。
 - 不 import Playwright / Puppeteer，不为躲检测切 profile 或换号，不自动解验证码。
+
+## 停手会通知你
+
+停手不等于交出去了。库会在冻结的那一刻发一条**浏览器通知**，说清三件事：在哪个站点、
+为什么停、你该做什么（登录 / 完成人机验证 / 等配额恢复）。一份代码同时覆盖 Windows 与 macOS，
+不需要装 app、不需要 token。
+
+一次性的准备（只做一次）：
+
+1. 在目标站点第一次用本库时，页面会请求通知权限——点「允许」。
+2. 没弹或点错了，去 `chrome://settings/content/notifications` 把该站点改成「允许」。
+3. macOS 还要在「系统设置 → 通知 → Google Chrome」里允许通知。
+
+授权状态可以随时查：
+
+```js
+console.log(await h.notifyPermission());   // granted / default / denied / unsupported
+```
+
+没有授权不会报错，只会降级：时间线记一条 `notify {ok:false, reason:"permission:denied"}`，
+门禁不受影响。**别把「没收到通知」当成「没停手」**。
+
+真正的「交权」要业务脚本自己接一下——通知只是叫你，控制权还得让出来：
+
+```js
+const h = await human.create(page, {
+  onBlock: async () => { await task.handOff(); },   // 把 space 交给用户，agent 不再抢
+});
+```
+
+交回之后 `space.ownership` 变成 `user`，下一个脚本要用 `takeOverTaskSpace(spaceId)` 才能继续；
+页面留在原地，登录态和验证结果都还在。
 
 ## 预警
 

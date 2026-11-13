@@ -89,6 +89,16 @@ HALTED --到点--> NORMAL
 
 冻结期间 `gate()` 抛 `HumanWarn`，`inspect` 与 sqlite 读照常。
 
+## 5.0 停手即通知
+
+冻结的那一刻，`lib/notify.mjs` 发一条浏览器通知（`new Notification`），内容是
+「站点 + 路径 + 触发原因 + 你该做什么」，**不带关键词与 URL query**。
+通道只有 `browser`（一份代码覆盖 Windows/macOS）与 `none` 两种，默认 `browser`。
+
+- 需要一次授权：站点允许通知；macOS 还要允许 Chrome 通知。
+- 没授权时降级：时间线记 `notify {ok:false, reason:"permission:default"}`，不抛错、不影响门禁。
+- 真正的交权由业务脚本的 `onBlock` 完成（通常 `await task.handOff()`），库不碰 space。
+
 评分：search_burst 30、search_no_detail 25、search_same_fp 20、search_interval_cv 15、chain_repeat 15、fail_rate 15、alerts_7d 10、silent_write 5/次（上限 10）。
 
 > v0.7 去掉了 orphan_request 项：它的来源是包装 `fetch`/`XHR`，那层钩子本身就是可探测痕迹，
