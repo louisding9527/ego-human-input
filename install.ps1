@@ -12,3 +12,6 @@ if (Test-Path $dst) {
 New-Item -ItemType Junction -Path $dst -Target $src | Out-Null
 Write-Host "linked: $dst -> $src"
 Write-Host "verify: node --test `"$src\tests\*.test.mjs`""
+
+# 把 ego-browser 条目指到本仓库的兼容壳（不碰 ego lite 安装目录）
+node "$src\tools\link-skill.mjs"

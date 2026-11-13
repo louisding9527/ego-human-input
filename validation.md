@@ -184,6 +184,56 @@ Enter 成 chip → 点「搜 索」→ 读 6s。
 
 ---
 
+# v0.8（2026-11-13）合并 ego-browser
+
+方向：ego-browser 的技能正文并入本项目，本项目成为浏览器任务的唯一入口。
+ego-browser 的指南仍由 `ego-browser skill` 打印（v2.2.1），所以只合并**稳定契约**：
+车道划分、轮次收尾、升级守卫。裁决写在 [references/bridge.md](references/bridge.md)。
+
+| 项 | 结果 |
+| --- | --- |
+| 单测 | **99/99** 通过（v0.7 的 88 条 + 桥接 11 条） |
+| 车道 | lint 从「禁 `page.*` 前缀」改为「禁输入类动作」；`page.snapshot/acceptDialog/setInputFiles/selectOption/waitForEvent/keyboard.paste` 放行，`page.click/fill/mouse/keyboard.type` 仍拦；`create()` 之前的引导导航放行 |
+| 收尾 | 新增 `h.finish()`（先 flush 再 `task.finish`）与 `h.handOff()`（先 flush 再 `task.handOff`），都幂等；`flush()` 幂等，连调不再二次 `endRun` / 二次 close（此前会抛 `ERR_INVALID_STATE`） |
+| 所有权 | 修正映射：`user → claimTaskSpace`、`agentDelegatedToUser → takeOverTaskSpace`（旧文档三处互斥） |
+| iframe | 同源 frame 递归下钻，累计偏移后按顶层视口给坐标；跨源 frame 抛 `frame-cross-origin`，不再一律 `s1-missing` |
+| 视觉通道 | `h.inspect.screenshot()` + `h.click({x,y})`；坐标点击打 `direct` 标记，不参与落点断言（门禁输出里显示 `n/a（N 个坐标点击）`） |
+| 门禁 | `type-cv` 改为「最长序列 ≥ 8 个间隔才断言」，样本不足记 n/a：5 个字符的 CV 落在 0.09 是常事，旧规则会误判 |
+| 入口 | `~/.agents/skills/ego-browser` 重指到本仓库 `skill/ego-browser/SKILL.md`（兼容壳），`tools/link-skill.mjs` 可建立/检查/撤销 |
+| 离线闭环 | `examples/timeline.mjs` 改为 data: 页面，不联网、不跳站；`parseUrl` 把 `data/about/file/blob` 归并为 host `local` |
+
+### 真机实测（2026-11-13，离线 data: 页面）
+
+跑 `examples/timeline.mjs`：点按钮（改标题）→ 点输入框 → 输入 `hello world` → 阅读。
+
+| 项 | 实测 |
+| --- | --- |
+| 门禁 | **11/11**（`run-mwewdumj-wh0x`） |
+| 落点 | 偏移 17.2 / 12.1px，居中率 0%，中位 12.1px |
+| 移动 | 142 个采样点，56 种不同间隔，最小 14ms |
+| 按键 | 13 次，间隔 CV 0.219 |
+| 非信任输入 | 0；滚轮 `isTrusted` 全真 |
+| 收尾 | `h.finish()` 返回 `{finished:true, kept:[]}`，空间已关，无残留 |
+
+### 实测抓到的两个真缺陷（已修）
+
+1. **点击基线取晚了 → 成功点击被判 noop**。`actions.click` 原本在点击**之后**才取
+   `mutations` 与 URL 基线，同步改 DOM 的点击（改标题、切 class）在点击返回时已经计数，
+   于是第一次判 `s4-noop`、第二次同目标直接 `s4-noop-repeat` 冻结。
+   修法：基线移到点击之前；另加焦点指纹（`ACTIVE_FN`），点进输入框只移焦点也算有效交互，
+   否则「点输入框再打字」每次都被记成失败。
+2. **`page.evaluate` 传 `undefined`** 是 v0.7 已修的项，这里复查仍成立（`browser.mjs` 单实参）。
+
+### 已知限制（v0.8 新增）
+
+- 跨源 iframe（登录框、验证码框、支付框）读不到 `contentDocument`，只能交给人。
+  这不是缺陷，是不跨源猜坐标的取舍。
+- 坐标点击不参与落点断言，纯 canvas 流程的「人味」由轨迹与间隔断言代理；
+  门禁会报 `directClicks` 数量，供人工复核。
+- `session-long` / `daily-quota` 是干净停，走 `h.finish()`；`handOff` 只用于挑战页与人工步骤。
+
+---
+
 # 复跑命令
 
 ```bash

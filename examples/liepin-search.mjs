@@ -6,7 +6,7 @@ const task = await taskSpace("liepin 搜索示例");
 const page = task.page("p1");
 await page.goto("https://h.liepin.com/", { timeout: 30000 });
 
-const h = await human.create(page);
+const h = await human.create(page, { space: task });
 
 console.log("site:", h.site());
 for (const note of h.notes()) console.log(`[${note.area}] ${note.text}`);
@@ -31,5 +31,4 @@ await h.note({
 });
 
 console.log("state:", h.state());
-console.log("flush:", await h.flush());
-await task.finish({ keep: [] });
+console.log("finish:", await h.finish());

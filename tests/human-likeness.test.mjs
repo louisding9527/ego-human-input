@@ -126,12 +126,26 @@ test("evaluate fails when the run is centred, degraded or read-free", () => {
 test("等距的间隔序列被判失败", () => {
   const metronomic = shaped([
     { ts: at(1), action: "click", ok: 1, landing_px: 9, move_points: 26, travel_px: 400, meta: { steps: [10, 10, 10, 10] } },
-    { ts: at(2), action: "type", ok: 1, meta: { gaps: [100, 100, 100, 100] } },
+    { ts: at(2), action: "type", ok: 1, meta: { gaps: [100, 100, 100, 100, 100, 100, 100, 100] } },
     { ts: at(3), action: "read", ok: 1, move_points: 14, travel_px: 110 },
   ]);
   const verdict = evaluate(metronomic, THRESHOLDS);
   assert.equal(verdict.checks.find((check) => check.id === "step-cv").ok, false);
   assert.equal(verdict.checks.find((check) => check.id === "type-cv").ok, false);
+});
+
+test("按键间隔样本不足时记 n/a，不因短输入误判，也不因全坐标点击误判落点", () => {
+  const short = shaped([
+    { ts: at(1), action: "type", ok: 1, meta: { gaps: [100, 100, 100] } },
+    { ts: at(2), action: "click", ok: 1, landing_px: 0, move_points: 24, flags: "click,direct", meta: { steps: [9, 13, 8, 12, 10] } },
+    { ts: at(3), action: "read", ok: 1, move_points: 14 },
+  ]);
+  const verdict = evaluate(short, THRESHOLDS);
+  assert.equal(verdict.checks.find((check) => check.id === "type-cv").ok, true);
+  assert.match(verdict.checks.find((check) => check.id === "type-cv").actual, /n\/a/);
+  assert.equal(verdict.checks.find((check) => check.id === "landing").ok, true);
+  assert.equal(verdict.checks.find((check) => check.id === "landing-median").ok, true);
+  assert.match(verdict.checks.find((check) => check.id === "landing").actual, /坐标点击/);
 });
 
 test("session shape is asserted, and missing data never counts as a pass", () => {

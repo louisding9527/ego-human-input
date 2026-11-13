@@ -10,10 +10,11 @@
       │  只依赖 lib/human.mjs 的句柄
       ▼
 ┌──────────────────────────────────────────────────────────┐
-│ 契约层  lib/human.mjs（254 行）                            │
+│ 契约层  lib/human.mjs                                       │
 │  装配：配置 → 站点档案 → store → 状态机 → 动作层 → 会话层   │
 │  闸门  gate()：会话形状 / 冷却 / 配额预留 / 间隔 / 令牌桶   │
 │  落库  logAction()：events + timeline                     │
+│  收尾  flush()（幂等）/ finish() / handOff()：落盘 + 关空间  │
 │  配方  lib/recipes.mjs：意图执行、经验落库                 │
 └──────────────────────────────────────────────────────────┘
       │                          │                    │
@@ -46,11 +47,14 @@
 
 ## 2. 契约
 
-**句柄**。业务脚本 `import lib/human.mjs` 拿到 `h`。写操作只能经 `h.*`，读操作经 `h.inspect.*`。
-业务脚本确实持有 `page`（ego-lite 的 `task.page()`），但 lint 会拦住 `page.*` 的写路径。
+**句柄**。业务脚本 `import lib/human.mjs` 拿到 `h`。输入类动作只能经 `h.*`；
+观察与浏览器自有操作（snapshot、弹窗、上传、下载、页签）走 `page.*` / `task.*`，
+分界与清单见 [references/bridge.md](../references/bridge.md)。lint 按动作类型判，不按 `page.` 前缀。
 
-**注入**。`create(page, { browser?, sleep?, rand?, now?, store?, dbPath? })`。
-四个依赖都可替换：假 browser 跑行为测试，假 sleep 跳过真实等待，固定 rand 复现采样，假 now 控制时钟。
+**注入**。`create(page, { browser?, sleep?, rand?, now?, store?, dbPath?, notify?, onBlock?, space? })`。
+依赖都可替换：假 browser 跑行为测试，假 sleep 跳过真实等待，固定 rand 复现采样，假 now 控制时钟。
+`space` 是 ego-lite 的 TaskSpace 句柄，注入后 `finish()` / `handOff()` 才能代你收尾；
+不注入时这两个方法报可执行的错，库本身不认 `taskSpace` 全局。
 
 **动作**。每个动作依次经过：会话闸门 → 冷却/配额/间隔 → 定位 → 前置校验 → 指针/按键 → 事后校验 → 落库。
 任一环节失败抛 `HumanWarn` 或 `HumanBlocked`，**不降级**。配额是预留-确认两段式，

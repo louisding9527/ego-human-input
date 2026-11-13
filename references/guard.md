@@ -59,7 +59,7 @@ node tools/lint-script.mjs your-script.mjs
 | S1 | 元素 0×0 / 找不到 | 滚轮逼近 12 次仍不可见 → 抛 |
 | S2 | 元素被遮挡 | 抛，不强点 |
 | S3 | disabled | 抛 |
-| S4 | 点击无响应（URL 与 DOM 都没变） | 记录 `s4-noop`；同目标第 2 次 → 熔断 |
+| S4 | 点击无响应（URL、DOM、焦点指纹都没变） | 记录 `s4-noop`；同目标第 2 次 → 熔断 |
 | S5 | 跳离原域 | 进 WARN |
 | S6 | 挑战页（URL 或 DOM 特征） | 立即停，ESCALATED |
 | S7 | 遮罩 | 由 S2 覆盖 |

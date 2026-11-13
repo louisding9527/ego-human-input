@@ -1,15 +1,20 @@
 # ego-human-input
 
-给 [ego-browser（ego-lite）](https://github.com/CitroLabs/ego-lite) 补上「一双手」：
-让 agent 的点击、输入、滚动落在人类行为的分布里，而不是靠限速器祈祷。
+浏览器操作的**唯一入口**：给 [ego-browser（ego-lite）](https://github.com/CitroLabs/ego-lite)
+补上「一双手」，让 agent 的点击、输入、滚动落在人类行为的分布里，而不是靠限速器祈祷。
+
+它同时承担原来 ego-browser 技能的调用契约（空间与轮次、观察、系统级操作），
+业务脚本只加载这一个技能即可。ego-browser 的版本匹配指南仍由 `ego-browser skill` 打印。
 
 它是一层输入库，装成 skill 由 AI 加载，也能被业务脚本直接 `import`。
 
 ```js
 const { human } = await import("file:///<SKILL_DIR>/lib/human.mjs");
-const h = await human.create(page);
+const task = await taskSpace("liepin 候选人筛选");
+const page = task.page("p1");
+const h = await human.create(page, { space: task });
 await h.run("search", { kw: "供应链总监" });   // 一次意图，内部执行整条配方
-await h.flush();
+await h.finish();                              // 先落盘，再关空间
 ```
 
 ---
@@ -29,7 +34,9 @@ ego-lite 给 agent 一双眼睛：真实 Chromium、真实登录态、页面可�
 三个约束决定了它的形态：
 
 1. **不启动独立进程。** 它就是一组 ESM 模块，跑在 `ego-browser nodejs` 里，和业务脚本同一个进程。
-2. **不接管页面。** 业务脚本仍持有 `page`，但写路径只能经 `h.*`；读路径经 `h.inspect.*`。
+2. **不接管页面。** 业务脚本仍持有 `page`：输入类动作只能经 `h.*`，观察与浏览器自有操作
+   （snapshot、弹窗、上传、下载、页签）走 `page.*` / `task.*`。分界见
+   [references/bridge.md](references/bridge.md)。
 3. **站点知识不在代码里。** 档案、经验、配方都落 SQLite，换站不改库。
 
 ---
@@ -165,7 +172,8 @@ node tools/verify-human.mjs --db <path>        # 指向另一份库
 剩下的两件事写在 [docs/architecture.md](docs/architecture.md)：阈值仍是没有真人样本校准的工程值，
 以及**一次复测不等于统计结论**，跨站点、跨意图还要多跑。
 
-单测 81 条：`node --test "tests/*.test.mjs"`。
+单测 99 条：`node --test "tests/*.test.mjs"`。其中 11 条是桥接层回归
+（收尾只落一次、交权顺序、车道划分、iframe 定位、noop 判定），见 [tests/bridge.test.mjs](tests/bridge.test.mjs)。
 
 ---
 
@@ -181,8 +189,9 @@ node tools/verify-human.mjs --db <path>        # 指向另一份库
 | 4 | v0.4 | 意图封装：配方 | 7 步 95.7 秒，一次调用；原子直调同流程 3–5 分钟 | 配方得靠实测攒 |
 | 5 | v0.5 | 站点知识：经验按 平台 + 意图 + 类型 归档 | 同意图去重只加 `hits`；配方失败自动落坑 | 经验不能跨站复用 |
 | 6 | v0.6 | 可判定：观测字段、冻结阈值、门禁、经验分层、迭代台账 | 37 条单测；合成回放样例门禁 6/6 | 会话形状、分布形状、哨兵暴露面 |
-| 7 | **v0.7（当前）** | 会话与分布：落地先看、休息、日总量、读写配比；对数正态时序 + 相邻相关；间隔序列进观测；哨兵去痕迹；契约层可注入测试 | 81 条单测，门禁 11 条断言 | 阈值未经真人样本校准；真站未复测 |
-| 8 | 下一级 | 自迭代收敛：改动→判定→留下或回退，无需人介入 | 迭代台账里连续多代 `kept` 且分项不退化 | — |
+| 7 | v0.7 | 会话与分布：落地先看、休息、日总量、读写配比；对数正态时序 + 相邻相关；间隔序列进观测；哨兵去痕迹；契约层可注入测试 | 88 条单测，门禁 11 条断言 | 阈值未经真人样本校准；真站未复测 |
+| 8 | **v0.8（当前）** | 合并 ego-browser：车道划分、轮次收尾（`finish` / `handOff`）、`flush` 幂等、同源 iframe、视觉通道、lint 改按动作名禁 | 99 条单测；11 条门禁；离线实测 11/11（validation.md） | ego-browser 指南升级后需重跑一遍单测与 lint |
+| 9 | 下一级 | 自迭代收敛：改动→判定→留下或回退，无需人介入 | 迭代台账里连续多代 `kept` 且分项不退化 | — |
 
 > **case：第三次拦截怎么变成了第二级**
 > 三次拦截里最隐蔽的一次是「3 分钟 5 轮搜索、10 次动作、0 次开详情」。
@@ -254,9 +263,9 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```js
 const task = await taskSpace("liepin 候选人筛选");
 const page = task.page("p1");
-await page.goto("https://www.liepin.com/");
+await page.goto("https://www.liepin.com/");   // create() 之前的引导导航
 
-const h = await human.create(page);
+const h = await human.create(page, { space: task });
 console.log(h.site());            // { host, siteKey, profile }
 console.log(h.health.warnings);   // 体检告警，空数组为正常
 
@@ -265,12 +274,13 @@ await h.read();                   // 5–8 秒停顿 + 1–2 次滚轮
 await h.type("供应链总监");
 await h.press("Enter");
 await h.click("role:button[name='搜 索']", { as: "search" });
-await h.flush();
+await h.finish();                 // 先落盘，再关空间；要留页面给用户看用 { keep: ["p2"] }
 ```
 
 ```bash
 node tools/lint-script.mjs examples/liepin-search.mjs   # 跑前扫一遍写路径
 node tools/verify-human.mjs                              # 跑后过一遍门禁
+node tools/link-skill.mjs                                # 把 ~/.agents/skills/ego-browser 指到本仓库的兼容壳
 ```
 
 ---
@@ -279,8 +289,10 @@ node tools/verify-human.mjs                              # 跑后过一遍门禁
 
 | 文件 | 给谁 |
 | --- | --- |
-| [SKILL.md](SKILL.md) | 给 agent：什么时候加载、API、禁止事项 |
+| [SKILL.md](SKILL.md) | 给 agent：什么时候加载、API、车道、收尾 |
+| [references/bridge.md](references/bridge.md) | 给 agent 和维护者：与 ego-browser 的边界、冲突裁决、升级守卫 |
 | [references/guard.md](references/guard.md) / [references/profiles.md](references/profiles.md) | 给调参的人：判定规则与档案字段 |
+| [skill/ego-browser/SKILL.md](skill/ego-browser/SKILL.md) | 兼容壳：`~/.agents/skills/ego-browser` 的链接目标，只做跳转 |
 | [docs/architecture.md](docs/architecture.md) | 给维护者：分层契约、缺口、优先级 |
 | [validation.md](validation.md) | 给验收：每个版本怎么验的、结果是什么 |
 
