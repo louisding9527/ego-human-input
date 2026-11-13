@@ -8,6 +8,8 @@
     "landingZeroRateMax": 0.1,
     "landingMedianPxMin": 3,
     "movePointsMin": 10,
+    "stepIntervalCvMin": 0.15,
+    "typeIntervalCvMin": 0.2,
     "readWriteRatioMin": 0.25,
     "firstActionDwellMsMin": 300,
     "sessionMaxMinutes": 120,

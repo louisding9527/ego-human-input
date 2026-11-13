@@ -143,6 +143,10 @@ test("click 成功时落点偏离中心，并记下移动点数与路径长度",
     assert.ok(Number(event.move_points) >= 10, `move_points=${event.move_points}`);
     assert.ok(Number(event.travel_px) > 0, `travel_px=${event.travel_px}`);
     assert.equal(String(event.target_hash).length, 8);
+    const meta = JSON.parse(event.meta);
+    assert.ok(meta.steps.length >= 5, `steps=${meta.steps.length}`);
+    assert.ok(new Set(meta.steps).size > 1, "移动步长间隔不能等距");
+    assert.ok(meta.hover > 0 && meta.clickDelay > 0);
     assert.deepEqual(JSON.parse(JSON.stringify(s.store.db.prepare("SELECT used FROM budget_use").get())), { used: 1 });
   } finally {
     s.close();
@@ -196,6 +200,9 @@ test("type 逐键发出，并记一条 type 事件", async () => {
     const [event] = s.events();
     assert.equal(event.action, "write");
     assert.match(event.flags, /type/);
+    const meta = JSON.parse(event.meta);
+    assert.equal(meta.gaps.length, result.ops);
+    assert.ok(meta.gaps.every((value) => value > 0));
   } finally {
     s.close();
   }

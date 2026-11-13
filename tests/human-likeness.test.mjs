@@ -34,6 +34,8 @@ const THRESHOLDS = {
     landingZeroRateMax: 0.1,
     landingMedianPxMin: 3,
     movePointsMin: 10,
+    stepIntervalCvMin: 0.15,
+    typeIntervalCvMin: 0.2,
     readWriteRatioMin: 0.25,
     firstActionDwellMsMin: 300,
     sessionMaxMinutes: 120,
@@ -102,14 +104,14 @@ test("observe folds events into assertable statistics", () => {
 
 test("evaluate fails when the run is centred, degraded or read-free", () => {
   const clean = shaped([
-    { ts: at(1), action: "click", ok: 1, landing_px: 9, move_points: 26, travel_px: 400 },
+    { ts: at(1), action: "click", ok: 1, landing_px: 9, move_points: 26, travel_px: 400, meta: { steps: [8, 14, 11, 9, 15, 12] } },
     { ts: at(2), action: "read", ok: 1, move_points: 14, travel_px: 100 },
     { ts: at(3), action: "read", ok: 1, move_points: 12, travel_px: 90 },
-    { ts: at(4), action: "type", ok: 1 },
+    { ts: at(4), action: "type", ok: 1, meta: { gaps: [60, 140, 90, 150, 70] } },
   ]);
   const good = evaluate(clean, THRESHOLDS);
   assert.equal(good.ok, true);
-  assert.equal(good.total, 9);
+  assert.equal(good.total, 11);
 
   const centred = shaped([
     { ts: at(1), action: "click", ok: 1, landing_px: 0, move_points: 26, travel_px: 400 },
@@ -119,6 +121,17 @@ test("evaluate fails when the run is centred, degraded or read-free", () => {
   assert.equal(bad.ok, false);
   assert.ok(bad.checks.find((check) => check.id === "landing").ok === false);
   assert.ok(bad.checks.find((check) => check.id === "read-write").ok === false);
+});
+
+test("等距的间隔序列被判失败", () => {
+  const metronomic = shaped([
+    { ts: at(1), action: "click", ok: 1, landing_px: 9, move_points: 26, travel_px: 400, meta: { steps: [10, 10, 10, 10] } },
+    { ts: at(2), action: "type", ok: 1, meta: { gaps: [100, 100, 100, 100] } },
+    { ts: at(3), action: "read", ok: 1, move_points: 14, travel_px: 110 },
+  ]);
+  const verdict = evaluate(metronomic, THRESHOLDS);
+  assert.equal(verdict.checks.find((check) => check.id === "step-cv").ok, false);
+  assert.equal(verdict.checks.find((check) => check.id === "type-cv").ok, false);
 });
 
 test("session shape is asserted, and missing data never counts as a pass", () => {
@@ -208,16 +221,18 @@ test("old databases gain the new columns and lose the unused rounds table", () =
   assert.ok(eventColumns.includes("landing_px"));
   assert.ok(eventColumns.includes("move_points"));
   assert.ok(eventColumns.includes("travel_px"));
+  assert.ok(eventColumns.includes("meta"));
   const noteColumns = store.db.prepare("PRAGMA table_info(site_notes)").all().map((row) => row.name);
   assert.ok(noteColumns.includes("scope"));
   assert.ok(noteColumns.includes("norm"));
   assert.equal(store.db.prepare("SELECT name FROM sqlite_master WHERE name='rounds'").get(), undefined);
 
   const runId = store.startRun({ host: "h.liepin.com", profile: "balanced", ver: "0.6.0" });
-  store.addEvent({ runId, host: "h.liepin.com", action: "click", ok: 1, landingPx: 7.5, movePoints: 30, travelPx: 420 });
+  store.addEvent({ runId, host: "h.liepin.com", action: "click", ok: 1, landingPx: 7.5, movePoints: 30, travelPx: 420, meta: { steps: [9, 12, 8] } });
   const back = store.eventsOfRun(runId)[0];
   assert.equal(back.landing_px, 7.5);
   assert.equal(back.move_points, 30);
+  assert.deepEqual(JSON.parse(back.meta), { steps: [9, 12, 8] });
   assert.equal(store.latestRun().id, runId);
 
   store.close();
@@ -273,11 +288,11 @@ function seedRun(file, { centred = false } = {}) {
   const push = (action, extra = {}) =>
     store.addEvent({ runId, seq: ++seq, ts: t + seq * 4000, host: "h.liepin.com", path: "/zhaopin", action, ok: 1, ...extra });
   push("nav");
-  push("click", { landingPx: centred ? 0 : 9, movePoints: 34, travelPx: 420 });
+  push("click", { landingPx: centred ? 0 : 9, movePoints: 34, travelPx: 420, meta: { steps: [8, 14, 11, 9, 15, 12] } });
   push("read", { movePoints: 18, travelPx: 160 });
   push("read", { movePoints: 14, travelPx: 120 });
-  push("click", { landingPx: centred ? 0 : 12, movePoints: 30, travelPx: 380 });
-  push("type");
+  push("click", { landingPx: centred ? 0 : 12, movePoints: 30, travelPx: 380, meta: { steps: [9, 13, 10, 16, 11] } });
+  push("type", { meta: { gaps: [60, 140, 90, 150, 70] } });
   store.endRun(runId, "done");
   store.close();
   return runId;
@@ -292,7 +307,7 @@ test("verify-human passes a clean run and fails a centred one", () => {
   seedRun(bad, { centred: true });
 
   const passed = execFileSync(process.execPath, [VERIFY_TOOL, "--db", good], { encoding: "utf8" });
-  assert.match(passed, /gate ok: 9\/9/);
+  assert.match(passed, /gate ok: 11\/11/);
 
   assert.throws(
     () => execFileSync(process.execPath, [VERIFY_TOOL, "--db", bad], { encoding: "utf8", stdio: "pipe" }),
