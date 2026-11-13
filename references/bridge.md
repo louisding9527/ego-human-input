@@ -25,11 +25,11 @@ ego-browser 的指南由二进制打印（`ego-browser skill`，当前 v2.2.1）
 | 页面观察 | 系统 | `page.snapshot()` / `page.info()` / `page.url()` / `h.inspect.*` |
 | 等状态 | 系统 | `page.waitForSelector` / `waitForURL` / `waitForFunction`，或 `h.waitFor` |
 | 截图 | 系统 | `h.inspect.screenshot()` 或 `page.screenshot()` |
-| 原生对话框 | 系统 | `page.acceptDialog()` / `page.dismissDialog()` |
-| 上传 | 系统 | `page.setInputFiles()` / `page.waitForFileChooser()` |
-| 下载 | 系统 | `page.waitForEvent("download")` → `saveAs(绝对路径)` |
-| 新标签页 | 系统 | 先 `page.waitForEvent("popup")` 再 `h.click`，然后 `task.adopt()` |
-| 原生 select | 系统 | `page.selectOption()` |
+| 原生对话框 | 系统 | `h.click(target, { onDialog: "dismiss" })`，或点击后 `page.acceptDialog()` / `page.dismissDialog()` |
+| 上传 | 系统 | `h.upload("css=input[type=file]", ["/abs/a.pdf"])`；不要直接 `page.setInputFiles` |
+| 下载 | 系统 | `page.click()` + 先 arm `waitForEvent("download")`，写 `// lint-allow download`；`h.click` 触发不了 |
+| 新标签页 | 系统 | 先 `page.waitForEvent("popup")` 再 `h.click(..., { expect: "popup" })`，用返回 page 的 `label` 继续 |
+| 原生 select | 系统 | `h.select("css=#s", { label: "two" })`；不要直接 `page.selectOption` |
 | 页签、交权、收尾 | 系统 | `task.tabs()` / `task.adopt()` / `h.handOff()` / `h.finish()` |
 | 剪贴板粘贴 | 系统 | `page.keyboard.paste()`（原生粘贴快捷键，属真实按键；其余 `page.keyboard.*` 仍禁用） |
 
@@ -79,19 +79,32 @@ ego-browser 的指南由二进制打印（`ego-browser skill`，当前 v2.2.1）
 
 ## 系统级缺口怎么补
 
-- **iframe**：同源 frame 会自动下钻（累计偏移后按顶层视口给坐标）。跨源 frame 读不到
-  `contentDocument`，抛 `frame-cross-origin`。跨源登录框、支付框、验证码框都属于「交给人」。
+- **iframe**：同源 frame 会自动下钻（累计偏移后按顶层视口给坐标），哨兵也会把观察器挂到
+  同源 frame 上，所以 frame 内的变更照样计入判定。跨源 frame 读不到 `contentDocument`，
+  抛 `frame-cross-origin`。跨源登录框、支付框、验证码框都属于「交给人」。
 - **canvas / 无 DOM 语义**：`const shot = await h.inspect.screenshot({ path: "C:/tmp/a.png" })`
   看图挑坐标，再 `h.click({ x, y })` / `h.move(x, y)` / `h.scroll()`。坐标是 CSS 像素。
   坐标点击会被打上 `direct` 标记，不参与落点断言（没有元素中心可比），
   门禁会报 `directClicks` 数量；一个全走坐标的 run 需要人工复核。
 - **富文本 / 表格**：`h.type` 对中文按词组 `insertText`，对 contenteditable 有效。
   需要带 HTML 结构粘贴时用 `page.keyboard.paste({ text, html })`。
-- **原生对话框**：`h.click` 触发的 `confirm` 不会自动处理。点击后立刻
-  `await page.acceptDialog()` 或 `page.dismissDialog()`；拿不准就 `await page.info()` 看。
-- **下载**：必须在同一脚本里 `saveAs` 到绝对路径。`h.flush()` 不会搬临时文件。
-- **新标签页**：`h.click` 不返回 popup 句柄。要接管就在点击前
-  `const popup = page.waitForEvent("popup")`，点击后 `await task.adopt(await popup)`。
+- **原生对话框**：`confirm` 会让 ego-lite 拒绝一切 `evaluate`，事后校验会被打断。
+  用 `h.click(target, { onDialog: "accept" | "dismiss" })` 让库自己接住。
+  实测：不处理会抛 `PageDialogOpenedError`，页面随后可正常继续。
+- **select / 上传**：这两个操作由浏览器改值并派发**非信任**的 `input`/`change`，
+  哨兵原本会把它们记成旁路写入并冻结（实测 `trigger: untrusted_input`）。
+  所以必须走 `h.select` / `h.upload`：它们内部先声明一段静默窗口再动手。
+  自己包别的系统操作时用 `h.system(fn)`。
+- **下载**：实测 ego-lite 0.6.3.12 只在它自己的 `page.click` 路径上发 `download` 事件；
+  `h.click` 打在同一个附件链接上，`click` 事件照常触发、页面不跳转，但**不产生 download 事件**。
+  所以下载是禁则里唯一允许 `page.click` 的地方：先 arm，再 `page.click`，写
+  `// lint-allow download`，最后 `saveAs(绝对路径)`。别指望 `h.flush()` 搬临时文件。
+- **新标签页**：`page.waitForEvent("popup")` 返回的 page **已经带 label**（实测 `p2`），
+  直接 `task.page(label)` 继续。`task.adopt()` 只用于 `unknown` 来源的标签，
+  对 popup 调用会报 `task.adopt requires an untracked page returned by task.tabs()`。
+- **点击产出不在当页**：开标签、触发下载的点击在当页没有 DOM/URL/焦点证据。
+  注入 `{ space }` 时库会数标签数，标签变多即算生效；否则传
+  `{ expect: "popup" | "download" }` 明说，避免被判 `s4-noop` 后在第二次误冻结。
 
 ## 旧说法修正
 

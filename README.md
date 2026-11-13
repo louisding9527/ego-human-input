@@ -250,6 +250,9 @@ node tools/iterate.mjs decide --id 1 --outcome kept --reason "门禁 6/6，分�
 5. **`silentWrite` 会被前端框架的受控输入误伤**：权重已压低，仅作诊断。
 6. **停手通知依赖一次性授权**：站点要允许通知、系统要允许 Chrome 通知，换机器或清了权限都要重来；
    没授权时只剩 `alerts` 表可查，「及时触达」就退化成「回来以后翻记录」。
+7. **下载只能由 `page.click` 触发**：实测 ego lite 0.6.3.12 的 `download` 事件只在它自己的
+   `page.click` 路径上出现；`h.click` 打在同一个附件链接上，点击事件触发、页面不跳转，
+   但没有 download 事件。这是禁则里唯一放行 `page.click` 的地方（`// lint-allow download`）。
 
 ---
 

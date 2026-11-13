@@ -7,7 +7,7 @@ import { readFile } from "node:fs/promises";
 // 因此这里只禁「输入类」page 调用，不再按 page. 前缀一刀切。
 const RULES = [
   { id: "B1-dom-click", re: /\bdispatchEvent\s*\(/, why: "程序化派发事件，无 pointer 序列" },
-  { id: "B1-page-input", re: /\bpage\.(click|dblclick|hover|dragAndDrop|fill|press|focus)\s*\(/, why: "输入类动作走 h.click/h.type/h.press" },
+  { id: "B1-page-input", re: /\bpage\.(click|dblclick|hover|dragAndDrop|fill|press|focus)\s*\(/, why: "输入类动作走 h.click/h.type/h.press；下载触发是唯一例外，写 // lint-allow download" },
   { id: "B1-page-mouse", re: /\bpage\.mouse\./, why: "指针动作走 h.click/h.move/h.scroll" },
   { id: "B1-page-keyboard", re: /\bpage\.keyboard\.(type|insertText|press|down|up)\s*\(/, why: "按键走 h.type/h.press；只有原生粘贴 page.keyboard.paste 放行" },
   { id: "B1-submit", re: /\.(submit|requestSubmit)\s*\(\s*\)/, why: "程序化提交表单" },

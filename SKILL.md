@@ -90,7 +90,7 @@ console.log(await h.finish());                      // 先落盘，再关空间
 | `h.session()` | 本次会话形状：dwell、时长、读写数、自动补读次数、休息次数 |
 | `h.site()` / `h.params()` / `h.health` | 站点档案 / 生效参数 / 环境体检 |
 | `h.goto(url)` | 导航入口，先判 URL 与 API 端点 |
-| `h.click(target, {as})` | 指针轨迹点击；`target` 是 locator 或 `{x,y}` |
+| `h.click(target, {as, onDialog, expect})` | 指针轨迹点击；`target` 是 locator 或 `{x,y}`。`onDialog` 处理原生对话框，`expect: "popup"｜"download"` 声明点击的产出不在当页 |
 | `h.focus(locator)` | 点一下并确认焦点，失败再点一次 |
 | `h.type(text, {as})` | 分拉丁/中文，含误输入与退格 |
 | `h.press(key)` | 单次按键，`ControlOrMeta+A` 这类同 Playwright |
@@ -100,6 +100,9 @@ console.log(await h.finish());                      // 先落盘，再关空间
 | `h.note({area,text,selector})` / `h.notes(area?)` | 记录、读取当前站点的交互经验 |
 | `h.inspect.*` | 只读：`rect / text / pageState / sentinel / requests / screenshot / query` |
 | `h.state()` / `h.alerts()` / `h.decide()` | 预警状态 / 待裁决 / 写回裁决 |
+| `h.select(locator, choice)` | 原生 select：系统车道，内部先声明静默窗口再改值 |
+| `h.upload(locator, files)` | 文件上传：同上，路径用绝对路径 |
+| `h.system(fn, {why?, ms?})` | 包住任意 `page.*` 系统操作，声明一段静默窗口 |
 | `h.flush(outcome?)` | 落 sqlite、时间线、结束 run。幂等，不关空间 |
 | `h.finish({keep?})` | 收尾：先 flush，再 `task.finish({keep})`。幂等 |
 | `h.handOff({reason?})` | 停手交权：先 flush，再 `task.handOff()`。幂等 |

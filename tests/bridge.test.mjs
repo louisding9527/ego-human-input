@@ -211,6 +211,110 @@ test("where.mjs 打印可用的 importUrl，且不写死平台路径", () => {
   assert.ok(info.egoSkillsDir === null || info.egoSkillsDir.startsWith("/") || /^[A-Za-z]:[\\/]/.test(info.egoSkillsDir));
 });
 
+test("系统车道：h.select / h.upload 先声明静默窗口再动", async () => {
+  const file = tmpDb("system-lane");
+  const store = openStore(file);
+  const calls = [];
+  const b = fakeBrowser();
+  b.muteProbe = async (channel, ms) => calls.push(["mute", ms]);
+  b.selectOption = async (selector, choice) => calls.push(["select", selector, choice]);
+  b.setInputFiles = async (selector, files) => calls.push(["upload", selector, files]);
+  const h = await create(null, { browser: b, rand: createRandom(9), sleep: async () => {}, store });
+  await h.select("css=#s", { label: "two" });
+  await h.upload("css=#f", ["/tmp/a.pdf"]);
+  assert.deepEqual(calls[0], ["mute", 2000]);
+  assert.deepEqual(calls[1], ["select", "#s", { label: "two" }]);
+  assert.deepEqual(calls[2], ["mute", 2000]);
+  assert.deepEqual(calls[3], ["upload", "#f", ["/tmp/a.pdf"]]);
+  await assert.rejects(() => h.select("role:combobox", { label: "x" }), /css=/);
+  store.close();
+  rmSync(file, { force: true });
+});
+
+test("同源 iframe 的点击按真实变化判定，不靠 frame 标记放行", async () => {
+  const run = async (mutate) => {
+    const file = tmpDb("frame-click");
+    const store = openStore(file);
+    const sentinel = { untrusted: 0, silentWrite: 0, mutations: 0 };
+    const b = fakeBrowser();
+    b.box = async () => ({ ...BOX, inFrame: true });
+    b.readSentinel = async () => ({ ...sentinel });
+    b.mouse = {
+      move: async () => {},
+      wheel: async () => {},
+      click: async () => {
+        if (mutate) sentinel.mutations += 1; // 观察器挂在 frame 上，frame 内变更可见
+      },
+    };
+    const h = await create(null, { browser: b, rand: createRandom(10), sleep: async () => {}, store });
+    const result = await h.click("css=#in");
+    store.close();
+    rmSync(file, { force: true });
+    return result;
+  };
+  assert.equal((await run(true)).ok, true);
+  const noop = await run(false);
+  assert.equal(noop.ok, false);
+  assert.equal(noop.noop, true);
+});
+
+test("点击后弹出原生对话框：按 onDialog 处理并补做校验", async () => {
+  const file = tmpDb("dialog");
+  const store = openStore(file);
+  const b = fakeBrowser();
+  let opened = false;
+  const handled = [];
+  const url = b.url;
+  b.url = async () => {
+    if (opened) {
+      opened = false;
+      const error = new Error("Runtime.evaluate cannot run while a JavaScript confirm dialog is open");
+      error.name = "PageDialogOpenedError";
+      throw error;
+    }
+    return url();
+  };
+  b.mouse = {
+    move: async () => {},
+    wheel: async () => {},
+    click: async () => {
+      opened = true;
+    },
+  };
+  b.dismissDialog = async () => handled.push("dismiss");
+  const h = await create(null, { browser: b, rand: createRandom(11), sleep: async () => {}, store });
+  const result = await h.click("css=#ask", { onDialog: "dismiss" });
+  assert.equal(result.ok, true);
+  assert.deepEqual(handled, ["dismiss"]);
+  store.close();
+  rmSync(file, { force: true });
+});
+
+test("开标签/下载的点击不会被误判 noop：{expect} 或标签数变化都算证据", async () => {
+  const file = tmpDb("popup-evidence");
+  const store = openStore(file);
+  let pages = 1;
+  const b = fakeBrowser();
+  b.readSentinel = async () => ({ untrusted: 0, silentWrite: 0, mutations: 0 });
+  const h = await create(null, {
+    browser: b,
+    rand: createRandom(12),
+    sleep: async () => {},
+    store,
+    space: { ownership: "agent", pages: async () => new Array(pages).fill({}), finish: async () => {}, handOff: async () => {} },
+  });
+  // 标签数变化 = 证据，不需要 expect
+  b.mouse = { move: async () => {}, wheel: async () => {}, click: async () => { pages = 2; } };
+  assert.equal((await h.click("css=#pop")).ok, true);
+  // 全都没有变化时，仍按 noop 处理
+  pages = 2;
+  b.mouse = { move: async () => {}, wheel: async () => {}, click: async () => {} };
+  assert.equal((await h.click("css=#dl", { expect: "download" })).ok, true);
+  assert.equal((await h.click("css=#dl")).ok, false);
+  store.close();
+  rmSync(file, { force: true });
+});
+
 test("BOX_FN 下钻同源 frame，跨源 frame 明确标记而不是假装找不到", () => {
   const makeEl = (rect, extra = {}) => ({
     getClientRects: () => [{}],

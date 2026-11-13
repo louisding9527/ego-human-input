@@ -233,6 +233,38 @@ ego-browser 的指南仍由 `ego-browser skill` 打印（v2.2.1），所以只�
   门禁会报 `directClicks` 数量，供人工复核。
 - `session-long` / `daily-quota` 是干净停，走 `h.finish()`；`handOff` 只用于挑战页与人工步骤。
 
+### 真机走查（2026-11-13，8 个场景）
+
+目标：把桥接契约里最容易打架的地方真跑一遍，不是纸上推演。环境：ego lite 0.6.3.12 / 指南 v2.2.1 / Windows。
+
+| # | 场景 | 结果 |
+| --- | --- | --- |
+| 1 | 原生 select（`page.selectOption`） | **冻结**：`untrusted_input` count=2。系统车道改值派发非信任 `input`/`change`，被哨兵当旁路输入 |
+| 2 | 文件上传（`page.setInputFiles`） | 同上，同一个冻结 |
+| 3 | 同源 iframe 点击 | 坐标下钻正确（`inFrame:true`），但 frame 内变更不在顶层观察器里，判定拿不到证据 |
+| 4 | 跨源 iframe 点击 | 修复后抛 `frame-cross-origin`，带 `crossOrigin:1`，不冻结、不吃配额 |
+| 5 | 点击后弹 `confirm` | `h.click` 抛 `PageDialogOpenedError`（ego-lite 拒绝 evaluate）；且配额槽未释放 |
+| 6 | `target=_blank` 弹新标签 | `task.adopt(popup)` 报 `requires an untracked page`；popup 其实已带 label（实测 `p2`） |
+| 7 | 附件下载 | `h.click` 命中链接（点击事件触发、页面不跳转），但 **ego-lite 不发 download 事件**；`page.click` 能发 |
+| 8 | 跨站导航（host-drift） | 正确抛 `HumanWarn host_drift` 并冻结；空间仍归 agent，需人工收拾 |
+
+修复（全部落地并回归）：
+
+1. `h.select` / `h.upload` / `h.system`：动之前广播一段静默窗口，哨兵把窗口内的非信任
+   `input`/`change` 当系统车道，不计入 `untrusted`/`silentWrite`。修完同一场景
+   `untrusted=0, silentWrite=0`。
+2. 哨兵把 MutationObserver 挂到同源 frame 的 `documentElement` 上，frame 内变更可见；
+   跨源 frame 跳过。因此去掉了「按 `inFrame` 放行」的捷径，frame 内的点击按真实变化判定。
+3. 点击证据收紧：焦点只有在落到**可编辑控件**时才算证据（点进 iframe 也会改顶层
+   activeElement，之前会把空点击判成功）；另外标签数变化、`{ expect }`、处理过对话框都算。
+4. 对话框：`h.click(target, { onDialog: "accept"|"dismiss" })`，并修掉异常路径不释放配额槽。
+5. 下载：确认只有 `page.click` 路径发 download 事件，禁则里加这一条例外（`// lint-allow download`）。
+6. popup：文档改为用事件返回的 `label` 继续，`adopt` 只用于 unknown 标签。
+
+复跑（修复后）：popup `label=p2`、标题 `Example Domain`、`finish` 正常；下载
+`gh_2.40.0_checksums.txt` → `saveAs` 落盘 1760 字节；iframe 同源点击五个事件齐全；
+跨源报 `frame-cross-origin`；单测 104/104。
+
 ---
 
 # 复跑命令
